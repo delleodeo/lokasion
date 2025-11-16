@@ -14,8 +14,12 @@ class Attendance(BaseModel):
     id: Optional[PyObjectId] = Field(default=None, alias="_id")
     student_id: str
     event_id: str
+    check_in_time: Optional[datetime] = None
+    check_out_time: Optional[datetime] = None
+    check_in_status: Optional[str] = None  # "Present", "Absent", "Late"
+    check_out_status: Optional[str] = None # "Present", "Absent", "Early"
     timestamp: datetime
-    status: str  # Present, Out of Range
+    status: str  # Present, Absent
 
 class AttendanceInDB(Attendance):
     pass

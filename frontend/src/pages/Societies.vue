@@ -251,10 +251,10 @@ export default {
       }
     },
     createEvent(departmentId, departmentName) {
-      // Navigate to create event page with department info
+      // Navigate to create event page with department info as query params
       this.$router.push({
         name: 'CreateEvent',
-        params: { departmentId, departmentName }
+        query: { departmentId, departmentName }
       });
     }
   }

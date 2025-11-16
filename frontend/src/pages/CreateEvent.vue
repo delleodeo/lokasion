@@ -119,11 +119,19 @@ export default {
         const token = localStorage.getItem('token');
         const decodedToken = jwtDecode(token);
         
+        // Convert datetime-local to local time string WITHOUT UTC conversion
+        const toLocalDateTime = (datetimeLocal) => {
+          if (!datetimeLocal) return null;
+          // datetime-local format: "2025-11-16T18:46"
+          // Return as-is with seconds appended (backend expects YYYY-MM-DDTHH:mm:ss)
+          return datetimeLocal.length === 16 ? datetimeLocal + ':00' : datetimeLocal;
+        };
+        
         const eventData = {
           ...this.event,
           teacher_id: decodedToken.user_id,
-          start_time: new Date(this.event.start_time).toISOString(),
-          end_time: new Date(this.event.end_time).toISOString()
+          start_time: toLocalDateTime(this.event.start_time),
+          end_time: toLocalDateTime(this.event.end_time)
         };
 
         await axios.post(`${API_BASE_URL}/events/`, eventData, {

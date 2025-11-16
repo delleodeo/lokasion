@@ -24,25 +24,10 @@ async def get_societies(token: dict = Depends(decodeJWT)):
         
         # Get departments based on role
         if user_role == "student":
-            # Students only see departments with approved teachers
-            approved_teacher_enrollments = await enrollment_collection.find({
-                "status": "approved"
-            }).to_list(1000)
-            
-            # Get department IDs with approved teachers
-            dept_ids_with_teachers = set()
-            for enrollment in approved_teacher_enrollments:
-                user = await user_collection.find_one({"_id": ObjectId(enrollment["user_id"])})
-                if user and user.get("role") == "teacher":
-                    dept_ids_with_teachers.add(enrollment["department_id"])
-            
-            # Get departments that have approved teachers
-            departments = []
-            for dept_id_str in dept_ids_with_teachers:
-                dept = await department_collection.find_one({"_id": ObjectId(dept_id_str)})
-                if dept:
-                    dept["_id"] = str(dept["_id"])
-                    departments.append(dept)
+            # Students see all departments so they can enroll in any
+            departments = await department_collection.find().to_list(1000)
+            for dept in departments:
+                dept["_id"] = str(dept["_id"])
             
             # Get student's enrollment status for each department
             user_id = token.get("user_id")
@@ -61,16 +46,16 @@ async def get_societies(token: dict = Depends(decodeJWT)):
             for dept in departments:
                 dept["_id"] = str(dept["_id"])
             
-            # Get teacher's enrollment status
+            # Get teacher's enrollment status for all departments
             user_id = token.get("user_id")
-            enrollment = await enrollment_collection.find_one({"user_id": user_id})
+            enrollments = await enrollment_collection.find({"user_id": user_id}).to_list(1000)
+            enrollment_map = {e["department_id"]: {"status": e["status"], "id": str(e["_id"])} for e in enrollments}
             
             for dept in departments:
-                if enrollment and enrollment["department_id"] == dept["_id"]:
-                    dept["enrollment_status"] = enrollment["status"]
-                    dept["enrollment_id"] = str(enrollment["_id"])
-                else:
-                    dept["enrollment_status"] = "not_enrolled"
+                enrollment_info = enrollment_map.get(dept["_id"], {"status": "not_enrolled", "id": None})
+                dept["enrollment_status"] = enrollment_info["status"]
+                if enrollment_info["id"]:
+                    dept["enrollment_id"] = enrollment_info["id"]
         
         else:
             # Admins see all departments
@@ -82,6 +67,9 @@ async def get_societies(token: dict = Depends(decodeJWT)):
     except HTTPException:
         raise
     except Exception as e:
+        print(f"[ERROR] Failed to fetch societies: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch societies: {str(e)}",
@@ -100,16 +88,7 @@ async def request_enrollment(department_id: str = Body(..., embed=True), token: 
         user_id = token.get("user_id")
         user_role = token.get("role")
         
-        # Teachers can only enroll in ONE department
-        if user_role == "teacher":
-            existing_enrollment = await enrollment_collection.find_one({"user_id": user_id})
-            if existing_enrollment:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Teachers can only be enrolled in one department",
-                )
-        
-        # Check if already enrolled or pending
+        # Check if already enrolled or pending in THIS specific department
         existing = await enrollment_collection.find_one({
             "user_id": user_id,
             "department_id": department_id
@@ -165,13 +144,25 @@ async def get_my_enrollments(token: dict = Depends(decodeJWT)):
         # Populate department info and convert ObjectId to string
         for enrollment in enrollments:
             enrollment["_id"] = str(enrollment["_id"])
-            dept = await department_collection.find_one({"_id": ObjectId(enrollment["department_id"])})
-            enrollment["department_name"] = dept.get("name", "Unknown") if dept else "Unknown"
+            
+            # Handle department_id - it might be string, ObjectId, or None
+            dept_id = enrollment.get("department_id")
+            if dept_id is not None and dept_id != "" and dept_id != "None":
+                # Convert to ObjectId if it's a string
+                if isinstance(dept_id, str):
+                    dept_id = ObjectId(dept_id)
+                dept = await department_collection.find_one({"_id": dept_id})
+                enrollment["department_name"] = dept.get("name", "Unknown") if dept else "Unknown"
+            else:
+                enrollment["department_name"] = "Unknown"
         
         return enrollments
     except HTTPException:
         raise
     except Exception as e:
+        print(f"[ERROR] Failed to fetch enrollments: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch enrollments: {str(e)}",
@@ -201,53 +192,82 @@ async def get_pending_enrollments(token: dict = Depends(decodeJWT)):
                 user = await user_collection.find_one({"_id": ObjectId(enrollment["user_id"])})
                 if user and user.get("role") == "teacher":
                     enrollment["_id"] = str(enrollment["_id"])
-                    dept = await department_collection.find_one({"_id": ObjectId(enrollment["department_id"])})
+                    
+                    # Handle department_id - it might be string, ObjectId, or None
+                    dept_id = enrollment.get("department_id")
+                    if dept_id is not None and dept_id != "" and dept_id != "None":
+                        if isinstance(dept_id, str):
+                            dept_id = ObjectId(dept_id)
+                        dept = await department_collection.find_one({"_id": dept_id})
+                        enrollment["department_name"] = dept.get("name", "Unknown") if dept else "Unknown"
+                    else:
+                        enrollment["department_name"] = "Unknown"
+                    
                     enrollment["user_name"] = user.get("name", "Unknown")
                     enrollment["user_email"] = user.get("email", "Unknown")
                     enrollment["user_role"] = user.get("role", "Unknown")
-                    enrollment["department_name"] = dept.get("name", "Unknown") if dept else "Unknown"
                     enrollments.append(enrollment)
         else:
-            # Teachers see student enrollment requests for their department
-            # First get teacher's approved department
-            teacher_enrollment = await enrollment_collection.find_one({
+            # Teachers see student enrollment requests for ALL their approved departments
+            # Get all teacher's approved departments
+            teacher_enrollments = await enrollment_collection.find({
                 "user_id": user_id,
                 "status": "approved"
-            })
+            }).to_list(1000)
             
-            if teacher_enrollment:
-                teacher_dept_id = teacher_enrollment["department_id"]
-                
-                # Get pending student enrollments for this department
-                all_pending = await enrollment_collection.find({
-                    "status": "pending",
-                    "department_id": teacher_dept_id
-                }).to_list(1000)
-                
-                for enrollment in all_pending:
-                    user = await user_collection.find_one({"_id": ObjectId(enrollment["user_id"])})
-                    if user and user.get("role") == "student":
-                        enrollment["_id"] = str(enrollment["_id"])
-                        dept = await department_collection.find_one({"_id": ObjectId(enrollment["department_id"])})
-                        enrollment["user_id"] = str(user["_id"])
-                        enrollment["user_name"] = user.get("name", "Unknown")
-                        enrollment["user_email"] = user.get("email", "Unknown")
-                        enrollment["user_role"] = user.get("role", "Unknown")
+            # Collect valid department IDs
+            teacher_dept_ids = []
+            for enrollment in teacher_enrollments:
+                dept_id = enrollment.get("department_id")
+                if dept_id and dept_id != "" and dept_id != "None":
+                    teacher_dept_ids.append(dept_id)
+            
+            if not teacher_dept_ids:
+                return []
+            
+            # Get pending student enrollments for ALL teacher's departments
+            all_pending = await enrollment_collection.find({
+                "status": "pending",
+                "department_id": {"$in": teacher_dept_ids}
+            }).to_list(1000)
+            
+            for enrollment in all_pending:
+                user = await user_collection.find_one({"_id": ObjectId(enrollment["user_id"])})
+                if user and user.get("role") == "student":
+                    enrollment["_id"] = str(enrollment["_id"])
+                    
+                    # Handle department_id - it might be string, ObjectId, or None
+                    dept_id = enrollment.get("department_id")
+                    if dept_id is not None and dept_id != "" and dept_id != "None":
+                        if isinstance(dept_id, str):
+                            dept_id = ObjectId(dept_id)
+                        dept = await department_collection.find_one({"_id": dept_id})
                         enrollment["department_name"] = dept.get("name", "Unknown") if dept else "Unknown"
-                        enrollments.append(enrollment)
+                    else:
+                        enrollment["department_name"] = "Unknown"
+                    
+                    enrollment["user_id"] = str(user["_id"])
+                    enrollment["user_name"] = user.get("name", "Unknown")
+                    enrollment["user_email"] = user.get("email", "Unknown")
+                    enrollment["user_role"] = user.get("role", "Unknown")
+                    enrollment["department_id"] = str(enrollment.get("department_id", ""))
+                    enrollments.append(enrollment)
         
         return enrollments
     except HTTPException:
         raise
     except Exception as e:
+        print(f"[ERROR] Failed to fetch pending enrollments: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch pending enrollments: {str(e)}",
         )
 
 @router.get("/approved", response_description="Get approved students")
-async def get_approved_enrollments(token: dict = Depends(decodeJWT)):
-    """Teachers can view all approved students in their department"""
+async def get_approved_enrollments(department_id: str = None, token: dict = Depends(decodeJWT)):
+    """Teachers can view all approved students in their department(s)"""
     try:
         if not token or token.get("role") != "teacher":
             raise HTTPException(
@@ -257,21 +277,34 @@ async def get_approved_enrollments(token: dict = Depends(decodeJWT)):
         
         user_id = token.get("user_id")
         
-        # Get teacher's approved department
-        teacher_enrollment = await enrollment_collection.find_one({
+        # Get teacher's approved departments
+        teacher_enrollments = await enrollment_collection.find({
             "user_id": user_id,
             "status": "approved"
-        })
+        }).to_list(1000)
         
-        if not teacher_enrollment:
+        if not teacher_enrollments:
             return []
         
-        teacher_dept_id = teacher_enrollment["department_id"]
+        # Get list of teacher's approved department IDs
+        teacher_dept_ids = [e["department_id"] for e in teacher_enrollments]
         
-        # Get approved student enrollments for this department
+        # If department_id is specified, verify teacher has access and use it
+        # Otherwise, return students from all teacher's departments
+        if department_id:
+            if department_id not in teacher_dept_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You don't have access to this department",
+                )
+            target_dept_ids = [department_id]
+        else:
+            target_dept_ids = teacher_dept_ids
+        
+        # Get approved student enrollments for these departments
         approved_enrollments = await enrollment_collection.find({
             "status": "approved",
-            "department_id": teacher_dept_id
+            "department_id": {"$in": target_dept_ids}
         }).to_list(1000)
         
         result = []
@@ -279,14 +312,34 @@ async def get_approved_enrollments(token: dict = Depends(decodeJWT)):
             user = await user_collection.find_one({"_id": ObjectId(enrollment["user_id"])})
             if user and user.get("role") == "student":
                 enrollment["_id"] = str(enrollment["_id"])
-                dept = await department_collection.find_one({"_id": ObjectId(enrollment["department_id"])})
+                
+                # Handle department_id - it might be string, ObjectId, or None
+                dept_id = enrollment.get("department_id")
+                dept = None
+                if dept_id is not None and dept_id != "" and dept_id != "None":
+                    if isinstance(dept_id, str):
+                        dept_id = ObjectId(dept_id)
+                    dept = await department_collection.find_one({"_id": dept_id})
+                
+                # Build full name from first_name + last_name if available
+                first_name = user.get("first_name", "")
+                last_name = user.get("last_name", "")
+                if first_name and last_name:
+                    full_name = f"{first_name} {last_name}"
+                else:
+                    full_name = user.get("name", "Unknown")
+                
                 result.append({
                     "enrollment_id": str(enrollment["_id"]),
                     "user_id": str(user["_id"]),
-                    "user_name": user.get("name", "Unknown"),
+                    "user_name": full_name,
+                    "user_first_name": first_name,
+                    "user_last_name": last_name,
+                    "user_id_number": user.get("id_number", "N/A"),
                     "user_email": user.get("email", "Unknown"),
                     "user_role": user.get("role", "Unknown"),
                     "department_name": dept.get("name", "Unknown") if dept else "Unknown",
+                    "department_id": enrollment["department_id"],
                     "approved_at": enrollment.get("reviewed_at", enrollment.get("requested_at"))
                 })
         
@@ -297,6 +350,190 @@ async def get_approved_enrollments(token: dict = Depends(decodeJWT)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch approved enrollments: {str(e)}",
+        )
+
+@router.get("/approved/export", response_description="Export approved students to Excel")
+async def export_approved_enrollments(department_id: str = None, token: dict = Depends(decodeJWT)):
+    """Export approved students list to Excel"""
+    from fastapi.responses import StreamingResponse
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from io import BytesIO
+    
+    try:
+        if not token or token.get("role") != "teacher":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only teachers can export enrollments",
+            )
+        
+        user_id = token.get("user_id")
+        
+        # Get teacher's approved departments
+        teacher_enrollments = await enrollment_collection.find({
+            "user_id": user_id,
+            "status": "approved"
+        }).to_list(1000)
+        
+        if not teacher_enrollments:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No approved departments found",
+            )
+        
+        teacher_dept_ids = [e["department_id"] for e in teacher_enrollments]
+        
+        # Verify access if department_id specified
+        if department_id:
+            if department_id not in teacher_dept_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You don't have access to this department",
+                )
+            target_dept_ids = [department_id]
+        else:
+            target_dept_ids = teacher_dept_ids
+        
+        # Get approved students
+        approved_enrollments = await enrollment_collection.find({
+            "status": "approved",
+            "department_id": {"$in": target_dept_ids}
+        }).to_list(1000)
+        
+        # Create workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Enrolled Students"
+        
+        # Get department name for header
+        dept_name = "All Departments"
+        if department_id:
+            dept = await department_collection.find_one({"_id": ObjectId(department_id)})
+            if dept:
+                dept_name = dept.get("name", "Unknown")
+        
+        # Header
+        ws.merge_cells('A1:F1')
+        ws['A1'] = f"Enrolled Students - {dept_name}"
+        ws['A1'].font = Font(size=16, bold=True)
+        ws['A1'].alignment = Alignment(horizontal='center')
+        
+        # Column headers
+        headers = ['No.', 'ID Number', 'First Name', 'Last Name', 'Email', 'Society', 'Approved Date']
+        header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        header_font = Font(color="FFFFFF", bold=True)
+        
+        for col_num, header in enumerate(headers, 1):
+            cell = ws.cell(row=3, column=col_num)
+            cell.value = header
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center')
+        
+        # Add data
+        row_num = 4
+        for idx, enrollment in enumerate(approved_enrollments, 1):
+            user = await user_collection.find_one({"_id": ObjectId(enrollment["user_id"])})
+            if user and user.get("role") == "student":
+                # Handle department_id - it might be string, ObjectId, or None
+                dept_id = enrollment.get("department_id")
+                dept = None
+                if dept_id is not None and dept_id != "" and dept_id != "None":
+                    if isinstance(dept_id, str):
+                        dept_id = ObjectId(dept_id)
+                    dept = await department_collection.find_one({"_id": dept_id})
+                
+                first_name = user.get("first_name", "")
+                last_name = user.get("last_name", "")
+                if not first_name or not last_name:
+                    full_name = user.get("name", "Unknown")
+                    name_parts = full_name.split(" ", 1)
+                    first_name = name_parts[0] if not first_name and len(name_parts) > 0 else first_name
+                    last_name = name_parts[1] if not last_name and len(name_parts) > 1 else last_name
+                
+                ws.cell(row=row_num, column=1, value=idx)
+                ws.cell(row=row_num, column=2, value=user.get("id_number", "N/A"))
+                ws.cell(row=row_num, column=3, value=first_name)
+                ws.cell(row=row_num, column=4, value=last_name)
+                ws.cell(row=row_num, column=5, value=user.get("email", ""))
+                ws.cell(row=row_num, column=6, value=dept.get("name", "Unknown") if dept else "Unknown")
+                
+                approved_date = enrollment.get("reviewed_at", enrollment.get("requested_at"))
+                ws.cell(row=row_num, column=7, value=approved_date)
+                
+                row_num += 1
+        
+        # Adjust column widths
+        ws.column_dimensions['A'].width = 6
+        ws.column_dimensions['B'].width = 15
+        ws.column_dimensions['C'].width = 20
+        ws.column_dimensions['D'].width = 20
+        ws.column_dimensions['E'].width = 30
+        ws.column_dimensions['F'].width = 25
+        ws.column_dimensions['G'].width = 20
+        
+        # Save to BytesIO
+        excel_buffer = BytesIO()
+        wb.save(excel_buffer)
+        excel_buffer.seek(0)
+        
+        filename = f"enrolled_students_{dept_name.replace(' ', '_')}.xlsx"
+        
+        return StreamingResponse(
+            excel_buffer,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to export enrollments: {str(e)}",
+        )
+
+@router.get("/teacher/departments", response_description="Get teacher's approved departments")
+async def get_teacher_departments(token: dict = Depends(decodeJWT)):
+    """Get list of departments teacher is approved in"""
+    try:
+        if not token or token.get("role") != "teacher":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only teachers can access this endpoint",
+            )
+        
+        user_id = token.get("user_id")
+        
+        # Get teacher's approved departments
+        teacher_enrollments = await enrollment_collection.find({
+            "user_id": user_id,
+            "status": "approved"
+        }).to_list(1000)
+        
+        departments = []
+        for enrollment in teacher_enrollments:
+            # Handle department_id - it might be string, ObjectId, or None
+            dept_id = enrollment.get("department_id")
+            dept = None
+            if dept_id is not None and dept_id != "" and dept_id != "None":
+                if isinstance(dept_id, str):
+                    dept_id = ObjectId(dept_id)
+                dept = await department_collection.find_one({"_id": dept_id})
+            
+            if dept:
+                departments.append({
+                    "department_id": str(dept["_id"]),
+                    "department_name": dept.get("name", "Unknown"),
+                    "enrollment_id": str(enrollment["_id"])
+                })
+        
+        return departments
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch teacher departments: {str(e)}",
         )
 
 @router.post("/review/{enrollment_id}", response_description="Approve or decline enrollment")

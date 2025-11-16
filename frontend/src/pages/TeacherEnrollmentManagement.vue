@@ -162,7 +162,7 @@ const fetchPendingEnrollments = async () => {
   try {
     loading.value = true;
     const token = localStorage.getItem('token');
-    const response = await axios.get('http://localhost:8001/enrollments/pending', {
+    const response = await axios.get('http://localhost:8000/enrollments/pending', {
       headers: { Authorization: `Bearer ${token}` }
     });
     pendingEnrollments.value = response.data;
@@ -179,7 +179,7 @@ const reviewEnrollment = async (enrollmentId, action) => {
     processingId.value = enrollmentId;
     const token = localStorage.getItem('token');
     await axios.post(
-      `http://localhost:8001/enrollments/review/${enrollmentId}`,
+      `http://localhost:8000/enrollments/review/${enrollmentId}`,
       { action },
       { headers: { Authorization: `Bearer ${token}` } }
     );

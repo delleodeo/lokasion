@@ -11,6 +11,9 @@ router = APIRouter(
 
 class RegisterRequest(BaseModel):
     """Request model for user registration."""
+    first_name: str
+    last_name: str
+    id_number: str
     name: str
     email: EmailStr
     password: str
@@ -27,6 +30,9 @@ async def register(reg_data: RegisterRequest = Body(...)):
     try:
         # Convert to dictionary for processing
         user_data = {
+            "first_name": reg_data.first_name,
+            "last_name": reg_data.last_name,
+            "id_number": reg_data.id_number,
             "name": reg_data.name,
             "email": reg_data.email,
             "password": reg_data.password,

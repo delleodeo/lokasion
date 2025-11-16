@@ -40,7 +40,7 @@ async def startup_event():
         # Test database connection
         await client.admin.command('ping')
         print("\n" + "="*60)
-        print("✅ DATABASE CONNECTION SUCCESSFUL")
+        print("[OK] DATABASE CONNECTION SUCCESSFUL")
         print("="*60)
         print("📊 Location-Based Attendance System is Ready!")
         print("📍 Backend running on: http://localhost:8001")

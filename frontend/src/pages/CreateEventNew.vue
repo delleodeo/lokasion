@@ -16,13 +16,7 @@
     <div class="page-header">
       <div>
         <h2>Create New Event</h2>
-        <p v-if="departmentName" class="department-badge">
-          <svg class="badge-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
-          </svg>
-          {{ departmentName }}
-        </p>
-        <p v-else>Set up an event with location-based attendance tracking</p>
+        <p>Set up an event with location-based attendance tracking</p>
       </div>
     </div>
 
@@ -30,6 +24,26 @@
       <!-- Form Section -->
       <div class="form-container">
         <form @submit.prevent="createEvent" class="event-form">
+          <div class="input-group">
+            <label for="department">Society/Department *</label>
+            <select 
+              id="department" 
+              v-model="event.department_id" 
+              required
+              class="department-select"
+            >
+              <option value="">Select a society</option>
+              <option 
+                v-for="dept in teacherDepartments" 
+                :key="dept.department_id" 
+                :value="dept.department_id"
+              >
+                {{ dept.department_name }}
+              </option>
+            </select>
+            <small class="input-hint">Choose which society this event belongs to</small>
+          </div>
+
           <div class="input-group">
             <label for="name">Event Name *</label>
             <input 
@@ -41,9 +55,21 @@
             >
           </div>
 
+          <div class="input-group">
+            <label for="location_name">Venue Name *</label>
+            <input 
+              type="text" 
+              id="location_name" 
+              v-model="event.location_name" 
+              placeholder="e.g., Room 301, Main Building or Manila City Hall"
+              required
+            >
+            <small class="input-hint">Help students know exactly where to go</small>
+          </div>
+
           <div class="location-section">
             <div class="location-header">
-              <label>Event Location</label>
+              <label>Event Location Coordinates</label>
               <button type="button" @click="useCurrentLocation" class="btn-location" :disabled="isGettingLocation">
                 <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -99,23 +125,85 @@
 
           <div class="time-inputs">
             <div class="input-group">
-              <label for="start_time">Start Time *</label>
+              <label for="start_time">Event Start Time *</label>
               <input 
                 type="datetime-local" 
                 id="start_time" 
                 v-model="event.start_time" 
                 required
               >
+              <small class="input-hint">Select the exact time for the event</small>
             </div>
 
             <div class="input-group">
-              <label for="end_time">End Time *</label>
+              <label for="end_time">Event End Time *</label>
               <input 
                 type="datetime-local" 
                 id="end_time" 
                 v-model="event.end_time" 
                 required
               >
+              <small class="input-hint">Select the exact time for the event</small>
+            </div>
+          </div>
+
+          <!-- Check-in Period -->
+          <div class="section-divider">
+            <h3>📥 Check-In Period</h3>
+            <p class="section-description">Set when students can check in to the event</p>
+          </div>
+
+          <div class="time-inputs">
+            <div class="input-group">
+              <label for="check_in_start">Check-In Opens</label>
+              <input 
+                type="datetime-local" 
+                id="check_in_start" 
+                v-model="event.check_in_start"
+                placeholder="Optional (defaults to event start)"
+              >
+              <small class="input-hint">Leave empty to use event start time</small>
+            </div>
+
+            <div class="input-group">
+              <label for="check_in_end">Check-In Closes</label>
+              <input 
+                type="datetime-local" 
+                id="check_in_end" 
+                v-model="event.check_in_end"
+                placeholder="Optional (defaults to event end)"
+              >
+              <small class="input-hint">Leave empty to use event end time</small>
+            </div>
+          </div>
+
+          <!-- Check-out Period -->
+          <div class="section-divider">
+            <h3>📤 Check-Out Period</h3>
+            <p class="section-description">Set when students must check out from the event</p>
+          </div>
+
+          <div class="time-inputs">
+            <div class="input-group">
+              <label for="check_out_start">Check-Out Opens</label>
+              <input 
+                type="datetime-local" 
+                id="check_out_start" 
+                v-model="event.check_out_start"
+                placeholder="Optional (defaults to event end)"
+              >
+              <small class="input-hint">Leave empty to use event end time</small>
+            </div>
+
+            <div class="input-group">
+              <label for="check_out_end">Check-Out Closes</label>
+              <input 
+                type="datetime-local" 
+                id="check_out_end" 
+                v-model="event.check_out_end"
+                placeholder="Optional"
+              >
+              <small class="input-hint">Leave empty for no deadline</small>
             </div>
           </div>
 
@@ -176,12 +264,19 @@ export default {
     return {
       event: {
         name: '',
+        location_name: '',
         latitude: null,
         longitude: null,
         radius: 100,
         start_time: '',
-        end_time: ''
+        end_time: '',
+        check_in_start: '',
+        check_in_end: '',
+        check_out_start: '',
+        check_out_end: '',
+        department_id: ''
       },
+      teacherDepartments: [],
       message: '',
       messageType: '',
       isLoading: false,
@@ -195,6 +290,7 @@ export default {
   async mounted() {
     await this.checkEnrollmentStatus();
     if (this.isApproved) {
+      await this.fetchTeacherDepartments();
       this.initMap();
     }
   },
@@ -217,6 +313,24 @@ export default {
       } catch (error) {
         console.error('Error checking enrollment status:', error);
         this.isApproved = false;
+      }
+    },
+    async fetchTeacherDepartments() {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get(`${API_BASE_URL}/enrollments/teacher/departments`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        this.teacherDepartments = response.data;
+        
+        // Check if department was passed via query params (from Societies page)
+        const departmentId = this.$route.query.departmentId;
+        if (departmentId && this.teacherDepartments.some(d => d.department_id === departmentId)) {
+          this.event.department_id = departmentId;
+        }
+        // Don't auto-select - teacher must explicitly choose the society
+      } catch (error) {
+        console.error('Error fetching teacher departments:', error);
       }
     },
     initMap() {
@@ -349,17 +463,53 @@ export default {
         return;
       }
 
+      // Validate that a department is selected
+      if (!this.event.department_id) {
+        this.message = 'Please select a society/department for this event';
+        this.messageType = 'error';
+        return;
+      }
+
       this.isLoading = true;
       try {
         const token = localStorage.getItem('token');
         const decodedToken = jwtDecode(token);
         
-        const eventData = {
-          ...this.event,
-          teacher_id: decodedToken.user_id,
-          start_time: new Date(this.event.start_time).toISOString(),
-          end_time: new Date(this.event.end_time).toISOString()
+        // Convert datetime-local to local time string WITHOUT UTC conversion
+        const toLocalDateTime = (datetimeLocal) => {
+          if (!datetimeLocal) return null;
+          // datetime-local format: "2025-11-16T18:46"
+          // Return as-is with seconds appended (backend expects YYYY-MM-DDTHH:mm:ss)
+          return datetimeLocal.length === 16 ? datetimeLocal + ':00' : datetimeLocal;
         };
+        
+        const eventData = {
+          name: this.event.name,
+          location_name: this.event.location_name || null,
+          latitude: this.event.latitude,
+          longitude: this.event.longitude,
+          radius: this.event.radius,
+          teacher_id: decodedToken.user_id,
+          department_id: this.event.department_id,
+          start_time: toLocalDateTime(this.event.start_time),
+          end_time: toLocalDateTime(this.event.end_time),
+        };
+
+        // Add optional check-in/check-out times if provided
+        if (this.event.check_in_start) {
+          eventData.check_in_start = toLocalDateTime(this.event.check_in_start);
+        }
+        if (this.event.check_in_end) {
+          eventData.check_in_end = toLocalDateTime(this.event.check_in_end);
+        }
+        if (this.event.check_out_start) {
+          eventData.check_out_start = toLocalDateTime(this.event.check_out_start);
+        }
+        if (this.event.check_out_end) {
+          eventData.check_out_end = toLocalDateTime(this.event.check_out_end);
+        }
+
+        console.log('📅 Sending event data:', eventData);
 
         await axios.post(`${API_BASE_URL}/events/`, eventData, {
           headers: { Authorization: `Bearer ${token}` }
@@ -382,11 +532,16 @@ export default {
     resetForm() {
       this.event = {
         name: '',
+        location_name: '',
         latitude: null,
         longitude: null,
         radius: 100,
         start_time: '',
-        end_time: ''
+        end_time: '',
+        check_in_start: '',
+        check_in_end: '',
+        check_out_start: '',
+        check_out_end: ''
       };
       
       if (this.marker) {
@@ -613,6 +768,33 @@ export default {
   font-size: 0.875rem;
   color: var(--gray-600);
   margin: 0;
+  font-style: italic;
+}
+
+.section-divider {
+  margin: 2rem 0 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 2px solid var(--gray-200);
+}
+
+.section-divider h3 {
+  color: var(--dark-green);
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.section-description {
+  color: var(--gray-600);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.input-hint {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--gray-500);
+  margin-top: 0.25rem;
   font-style: italic;
 }
 

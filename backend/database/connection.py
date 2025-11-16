@@ -1,12 +1,19 @@
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import MongoClient
 import os
 
 # Try to load from environment variable, fallback to localhost
 MONGO_DETAILS = os.getenv("MONGO_DETAILS", "mongodb://localhost:27017")
 
-print(f"🔗 Attempting to connect to MongoDB: {MONGO_DETAILS[:50]}...")
+print(f"[CONNECT] Attempting to connect to MongoDB: {MONGO_DETAILS[:50]}...")
 
-client = AsyncIOMotorClient(MONGO_DETAILS, serverSelectionTimeoutMS=5000)
+# Configure MongoDB to use naive (non-timezone-aware) datetimes
+# This ensures datetimes are stored and retrieved exactly as provided
+client = AsyncIOMotorClient(
+    MONGO_DETAILS, 
+    serverSelectionTimeoutMS=5000,
+    tz_aware=False  # Disable timezone-aware datetimes
+)
 
 database = client.attendance_system
 

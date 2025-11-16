@@ -3,7 +3,7 @@
     <table class="attendance-table" v-if="attendanceData.length > 0">
       <thead>
         <tr>
-          <th>Event ID</th>
+          <th>Event Name</th>
           <th>Check-In Time</th>
           <th>Status</th>
         </tr>
@@ -11,7 +11,7 @@
       <tbody>
         <tr v-for="record in attendanceData" :key="record._id">
           <td>
-            <span class="event-id">{{ record.event_id }}</span>
+            <span class="event-name">{{ record.event_name || 'Unknown Event' }}</span>
           </td>
           <td>
             <span class="timestamp">{{ formatDateTime(record.timestamp) }}</span>
@@ -87,12 +87,10 @@ tbody tr:hover {
   background-color: var(--gray-50);
 }
 
-.event-id {
-  font-family: monospace;
-  background: var(--gray-100);
-  padding: 0.25rem 0.75rem;
-  border-radius: 4px;
-  font-size: 0.85rem;
+.event-name {
+  font-weight: 600;
+  color: var(--dark-green);
+  font-size: 0.95rem;
 }
 
 .timestamp {

@@ -29,18 +29,45 @@
         </div>
       </div>
 
+      <!-- Filter by Society -->
+      <div v-if="teacherDepartments.length > 1" class="controls-section" style="margin-bottom: 2rem;">
+        <div class="control-group">
+          <label for="pendingSocietyFilter" class="control-label">
+            <svg class="label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+            </svg>
+            Filter by Society
+          </label>
+          <select 
+            id="pendingSocietyFilter"
+            v-model="selectedPendingDepartmentId" 
+            @change="onPendingDepartmentChange"
+            class="society-select"
+          >
+            <option value="">All Societies</option>
+            <option 
+              v-for="dept in teacherDepartments" 
+              :key="dept.department_id" 
+              :value="dept.department_id"
+            >
+              {{ dept.department_name }}
+            </option>
+          </select>
+        </div>
+      </div>
+
       <div v-if="loading" class="loading-state">
         <p>Loading enrollment requests...</p>
       </div>
 
-      <div v-else-if="pendingEnrollments.length === 0" class="empty-state">
+      <div v-else-if="filteredPendingEnrollments.length === 0" class="empty-state">
         <ClipboardDocumentCheckIcon class="empty-icon" />
         <h3>No Pending Requests</h3>
-        <p>All enrollment requests have been reviewed</p>
+        <p>{{ selectedPendingDepartmentId ? 'No pending requests for this society' : 'All enrollment requests have been reviewed' }}</p>
       </div>
 
     <div v-else class="enrollments-list">
-      <div v-for="enrollment in pendingEnrollments" :key="enrollment._id" class="enrollment-card">
+      <div v-for="enrollment in filteredPendingEnrollments" :key="enrollment._id" class="enrollment-card">
         <div class="enrollment-header">
           <div class="user-avatar">
             {{ getInitials(enrollment.user_name) }}
@@ -104,62 +131,123 @@
       <div class="page-header">
         <div>
           <h2>Enrolled Students</h2>
-          <p>Students currently enrolled in your department</p>
+          <p>Students currently enrolled in your department(s)</p>
         </div>
+      </div>
+
+      <!-- Society Selector and Controls -->
+      <div class="controls-section">
+        <div class="control-group">
+          <label for="departmentSelect" class="control-label">
+            <BuildingLibraryIcon class="label-icon" />
+            Select Society
+          </label>
+          <select 
+            id="departmentSelect" 
+            v-model="selectedDepartmentId" 
+            @change="onDepartmentChange"
+            class="department-select"
+          >
+            <option value="">All Societies</option>
+            <option 
+              v-for="dept in teacherDepartments" 
+              :key="dept.department_id" 
+              :value="dept.department_id"
+            >
+              {{ dept.department_name }}
+            </option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <label for="searchInput" class="control-label">
+            <svg class="label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            Search Students
+          </label>
+          <input
+            id="searchInput"
+            v-model="searchQuery"
+            type="text"
+            placeholder="Search by name, ID, or email..."
+            class="search-input"
+          />
+        </div>
+
+        <button @click="exportToExcel" class="btn-export-students">
+          <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          Export to Excel
+        </button>
       </div>
 
       <div v-if="loadingApproved" class="loading-state">
         <p>Loading enrolled students...</p>
       </div>
 
-      <div v-else-if="approvedEnrollments.length === 0" class="empty-state">
+      <div v-else-if="filteredApprovedEnrollments.length === 0" class="empty-state">
         <UserCircleIcon class="empty-icon" />
-        <h3>No Enrolled Students</h3>
-        <p>No students have been approved yet</p>
+        <h3>{{ searchQuery ? 'No Students Found' : 'No Enrolled Students' }}</h3>
+        <p>{{ searchQuery ? 'Try adjusting your search criteria' : 'No students have been approved yet' }}</p>
       </div>
 
-      <div v-else class="enrollments-list">
-        <div v-for="enrollment in approvedEnrollments" :key="enrollment.enrollment_id" class="enrollment-card approved-card">
-          <div class="enrollment-header">
-            <div class="user-avatar approved">
-              {{ getInitials(enrollment.user_name) }}
-            </div>
-            <div class="user-info">
-              <h3>{{ enrollment.user_name }}</h3>
-              <p class="user-email">{{ enrollment.user_email }}</p>
-            </div>
-          </div>
-
-          <div class="enrollment-body">
-            <div class="info-row">
-              <UserCircleIcon class="info-icon" />
-              <div>
-                <span class="info-label">Student ID</span>
-                <span class="info-value student-id">{{ enrollment.user_id }}</span>
+      <div v-else>
+        <div class="results-count">
+          Showing {{ filteredApprovedEnrollments.length }} of {{ approvedEnrollments.length }} students
+        </div>
+        <div class="enrollments-list">
+          <div v-for="enrollment in filteredApprovedEnrollments" :key="enrollment.enrollment_id" class="enrollment-card approved-card">
+            <div class="enrollment-header">
+              <div class="user-avatar approved">
+                {{ getInitials(enrollment.user_name) }}
+              </div>
+              <div class="user-info">
+                <h3>{{ enrollment.user_name }}</h3>
+                <p class="user-email">{{ enrollment.user_email }}</p>
               </div>
             </div>
 
-            <div class="info-row">
-              <BuildingLibraryIcon class="info-icon" />
-              <div>
-                <span class="info-label">Society</span>
-                <span class="info-value">{{ enrollment.department_name }}</span>
+            <div class="enrollment-body">
+              <div class="info-row">
+                <UserCircleIcon class="info-icon" />
+                <div>
+                  <span class="info-label">Student ID Number</span>
+                  <span class="info-value student-id-number">{{ enrollment.user_id_number || 'N/A' }}</span>
+                </div>
+              </div>
+
+              <div class="info-row">
+                <BuildingLibraryIcon class="info-icon" />
+                <div>
+                  <span class="info-label">Society</span>
+                  <span class="info-value">{{ enrollment.department_name }}</span>
+                </div>
+              </div>
+
+              <div class="info-row">
+                <CheckCircleIcon class="info-icon" />
+                <div>
+                  <span class="info-label">Email</span>
+                  <span class="info-value">{{ enrollment.user_email }}</span>
+                </div>
+              </div>
+
+              <div class="info-row">
+                <CheckCircleIcon class="info-icon" />
+                <div>
+                  <span class="info-label">Approved</span>
+                  <span class="info-value">{{ formatDate(enrollment.approved_at) }}</span>
+                </div>
               </div>
             </div>
 
-            <div class="info-row">
-              <CheckCircleIcon class="info-icon" />
-              <div>
-                <span class="info-label">Approved</span>
-                <span class="info-value">{{ formatDate(enrollment.approved_at) }}</span>
+            <div class="enrollment-status">
+              <div class="status-badge-approved">
+                <CheckCircleIcon class="status-icon" />
+                <span>Enrolled</span>
               </div>
-            </div>
-          </div>
-
-          <div class="enrollment-status">
-            <div class="status-badge-approved">
-              <CheckCircleIcon class="status-icon" />
-              <span>Enrolled</span>
             </div>
           </div>
         </div>
@@ -199,6 +287,10 @@ export default {
       activeTab: 'pending',
       pendingEnrollments: [],
       approvedEnrollments: [],
+      teacherDepartments: [],
+      selectedDepartmentId: '',
+      selectedPendingDepartmentId: '',
+      searchQuery: '',
       loading: true,
       loadingApproved: false,
       reviewing: null,
@@ -206,17 +298,70 @@ export default {
       messageType: ''
     };
   },
+  computed: {
+    filteredPendingEnrollments() {
+      if (!this.selectedPendingDepartmentId) {
+        return this.pendingEnrollments;
+      }
+      return this.pendingEnrollments.filter(enrollment => 
+        enrollment.department_id === this.selectedPendingDepartmentId
+      );
+    },
+    filteredApprovedEnrollments() {
+      console.log('Search Query:', this.searchQuery);
+      console.log('Total Enrollments:', this.approvedEnrollments.length);
+      
+      if (!this.searchQuery) {
+        return this.approvedEnrollments;
+      }
+      
+      const query = this.searchQuery.toLowerCase().trim();
+      const filtered = this.approvedEnrollments.filter(enrollment => {
+        const userName = (enrollment.user_name || '').toLowerCase();
+        const userEmail = (enrollment.user_email || '').toLowerCase();
+        const userIdNumber = (enrollment.user_id_number || '').toLowerCase();
+        const departmentName = (enrollment.department_name || '').toLowerCase();
+        
+        console.log('Checking:', userName, 'against', query);
+        
+        return userName.includes(query) ||
+               userEmail.includes(query) ||
+               userIdNumber.includes(query) ||
+               departmentName.includes(query);
+      });
+      
+      console.log('Filtered Results:', filtered.length);
+      return filtered;
+    }
+  },
   watch: {
     activeTab(newTab) {
-      if (newTab === 'approved' && this.approvedEnrollments.length === 0) {
-        this.fetchApprovedEnrollments();
+      if (newTab === 'approved') {
+        if (this.teacherDepartments.length === 0) {
+          this.fetchTeacherDepartments();
+        }
+        if (this.approvedEnrollments.length === 0) {
+          this.fetchApprovedEnrollments();
+        }
       }
     }
   },
   async created() {
+    await this.fetchTeacherDepartments();
     await this.fetchPendingEnrollments();
   },
   methods: {
+    async fetchTeacherDepartments() {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get(`${API_BASE_URL}/enrollments/teacher/departments`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        this.teacherDepartments = response.data;
+      } catch (error) {
+        console.error('Error fetching teacher departments:', error);
+      }
+    },
     async fetchPendingEnrollments() {
       try {
         this.loading = true;
@@ -237,8 +382,10 @@ export default {
       try {
         this.loadingApproved = true;
         const token = localStorage.getItem('token');
+        const params = this.selectedDepartmentId ? { department_id: this.selectedDepartmentId } : {};
         const response = await axios.get(`${API_BASE_URL}/enrollments/approved`, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
+          params: params
         });
         this.approvedEnrollments = response.data;
       } catch (error) {
@@ -247,6 +394,57 @@ export default {
         this.messageType = 'error';
       } finally {
         this.loadingApproved = false;
+      }
+    },
+    async fetchTeacherDepartments() {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get(`${API_BASE_URL}/enrollments/teacher/departments`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        this.teacherDepartments = response.data;
+      } catch (error) {
+        console.error('Failed to fetch teacher departments:', error);
+      }
+    },
+    onDepartmentChange() {
+      this.searchQuery = '';
+      this.fetchApprovedEnrollments();
+    },
+    onPendingDepartmentChange() {
+      // Just filter the existing pending enrollments
+      // No need to fetch again since we filter on frontend
+    },
+    async exportToExcel() {
+      try {
+        const token = localStorage.getItem('token');
+        const params = this.selectedDepartmentId ? { department_id: this.selectedDepartmentId } : {};
+        const response = await axios.get(`${API_BASE_URL}/enrollments/approved/export`, {
+          headers: { Authorization: `Bearer ${token}` },
+          params: params,
+          responseType: 'blob'
+        });
+        
+        // Create download link
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        const deptName = this.selectedDepartmentId ? 
+          this.teacherDepartments.find(d => d.department_id === this.selectedDepartmentId)?.department_name || 'Society' :
+          'All_Societies';
+        link.setAttribute('download', `enrolled_students_${deptName.replace(/ /g, '_')}.xlsx`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+        
+        this.message = 'Students list exported successfully!';
+        this.messageType = 'success';
+        setTimeout(() => { this.message = ''; }, 3000);
+      } catch (error) {
+        console.error('Error exporting students:', error);
+        this.message = 'Failed to export students list';
+        this.messageType = 'error';
       }
     },
     async reviewEnrollment(enrollmentId, action) {
@@ -366,6 +564,90 @@ export default {
 .page-header p {
   color: var(--gray-600);
   font-size: 1rem;
+}
+
+.controls-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.control-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--dark-green);
+}
+
+.label-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--medium-green);
+}
+
+.department-select,
+.search-input {
+  padding: 0.75rem 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+  background: white;
+}
+
+.department-select:focus,
+.search-input:focus {
+  outline: none;
+  border-color: var(--medium-green);
+  box-shadow: 0 0 0 3px rgba(25, 135, 84, 0.1);
+}
+
+.department-select {
+  cursor: pointer;
+}
+
+.btn-export-students {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  align-self: flex-end;
+  white-space: nowrap;
+}
+
+.btn-export-students:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+}
+
+.results-count {
+  padding: 0.75rem 1rem;
+  background: linear-gradient(135deg, #E8F5E9, #C8E6C9);
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  font-weight: 600;
+  color: var(--dark-green);
+  text-align: center;
 }
 
 .header-badge {
@@ -515,6 +797,18 @@ export default {
   font-size: 0.85rem;
   color: var(--dark-green);
   border: 1px solid var(--medium-green);
+}
+
+.student-id-number {
+  font-family: 'Courier New', monospace;
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--dark-green);
+  background: linear-gradient(135deg, #D1FAE5, #A7F3D0);
+  padding: 0.35rem 0.85rem;
+  border-radius: 8px;
+  border: 2px solid #10B981;
+  display: inline-block;
 }
 
 .enrollment-actions {

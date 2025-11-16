@@ -10,8 +10,8 @@
           </div>
           <div class="stats-badges">
             <div class="stats-badge">
-              <div class="stats-number">{{ events.length }}</div>
-              <div class="stats-label">Total Events</div>
+              <div class="stats-number">{{ filteredEvents.length }}</div>
+              <div class="stats-label">{{ selectedDepartmentId ? 'Society Events' : 'Total Events' }}</div>
             </div>
             <div class="stats-badge">
               <div class="stats-number">{{ totalAttendees }}</div>
@@ -21,6 +21,30 @@
         </div>
       </div>
 
+      <!-- Society Filter -->
+      <div v-if="teacherDepartments.length > 1" class="filter-section">
+        <label for="eventDepartmentFilter" class="filter-label">
+          <svg class="filter-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+          </svg>
+          Filter by Society
+        </label>
+        <select 
+          id="eventDepartmentFilter" 
+          v-model="selectedDepartmentId" 
+          class="department-filter"
+        >
+          <option value="">All Societies</option>
+          <option 
+            v-for="dept in teacherDepartments" 
+            :key="dept.department_id" 
+            :value="dept.department_id"
+          >
+            {{ dept.department_name }}
+          </option>
+        </select>
+      </div>
+
       <!-- Loading State -->
       <div v-if="loading" class="loading-container">
         <div class="spinner"></div>
@@ -28,7 +52,7 @@
       </div>
 
       <!-- Empty State -->
-      <div v-else-if="events.length === 0" class="empty-state">
+      <div v-else-if="filteredEvents.length === 0 && !loading" class="empty-state">
         <div class="empty-icon">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -44,7 +68,7 @@
       <!-- Events Grid -->
       <div v-else class="events-grid">
         <div
-          v-for="event in events"
+          v-for="event in filteredEvents"
           :key="event._id"
           class="event-card"
         >
@@ -78,13 +102,24 @@
               </div>
             </div>
 
+            <div class="detail-item" v-if="event.location_name">
+              <svg class="detail-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <div class="detail-content">
+                <span class="detail-label">Venue</span>
+                <span class="detail-value location-name">{{ event.location_name }}</span>
+              </div>
+            </div>
+
             <div class="detail-item">
               <svg class="detail-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
               <div class="detail-content">
-                <span class="detail-label">Location</span>
+                <span class="detail-label">GPS Coordinates</span>
                 <span class="detail-value">{{ event.latitude.toFixed(4) }}, {{ event.longitude.toFixed(4) }}</span>
               </div>
             </div>
@@ -229,7 +264,9 @@
                       <th>ID Number</th>
                       <th>Student Name</th>
                       <th>Email</th>
-                      <th>Check-in Time</th>
+                      <th>Check-In Time</th>
+                      <th>Check-Out Time</th>
+                      <th>Duration</th>
                       <th>Status</th>
                     </tr>
                   </thead>
@@ -239,7 +276,15 @@
                       <td class="student-id">{{ record.student_id_number || 'N/A' }}</td>
                       <td class="student-name">{{ record.student_name }}</td>
                       <td class="student-email">{{ record.student_email }}</td>
-                      <td>{{ formatDateTime(record.timestamp) }}</td>
+                      <td>{{ formatDateTime(record.check_in_time || record.timestamp) }}</td>
+                      <td>
+                        <span v-if="record.check_out_time">{{ formatDateTime(record.check_out_time) }}</span>
+                        <span v-else class="text-muted">Not checked out</span>
+                      </td>
+                      <td>
+                        <span v-if="record.check_in_time && record.check_out_time">{{ calculateDuration(record.check_in_time, record.check_out_time) }}</span>
+                        <span v-else class="text-muted">—</span>
+                      </td>
                       <td>
                         <span :class="['status-badge', record.status === 'Present' ? 'status-present' : 'status-absent']">
                           {{ record.status }}
@@ -280,6 +325,8 @@ import axios from 'axios';
 import { API_BASE_URL } from '../config.js';
 
 const events = ref([]);
+const teacherDepartments = ref([]);
+const selectedDepartmentId = ref('');
 const loading = ref(true);
 const showAttendanceModal = ref(false);
 const selectedEvent = ref(null);
@@ -291,8 +338,15 @@ const notification = ref({
   type: 'success'
 });
 
+const filteredEvents = computed(() => {
+  if (!selectedDepartmentId.value) {
+    return events.value;
+  }
+  return events.value.filter(event => event.department_id === selectedDepartmentId.value);
+});
+
 const totalAttendees = computed(() => {
-  return events.value.reduce((sum, event) => sum + (event.attendanceCount || 0), 0);
+  return filteredEvents.value.reduce((sum, event) => sum + (event.attendanceCount || 0), 0);
 });
 
 const presentCount = computed(() => {
@@ -433,13 +487,34 @@ const deleteEvent = async (event) => {
 const formatDateTime = (dateString) => {
   if (!dateString) return 'N/A';
   const date = new Date(dateString);
+  // NO TIMEZONE CONVERSION - Display in user's local time
   return date.toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
+    hour12: true
   });
+};
+
+const calculateDuration = (checkInTime, checkOutTime) => {
+  if (!checkInTime || !checkOutTime) return '—';
+  
+  const checkIn = new Date(checkInTime);
+  const checkOut = new Date(checkOutTime);
+  const diffMs = checkOut - checkIn;
+  
+  if (diffMs < 0) return 'Invalid';
+  
+  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+  const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+  
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  } else {
+    return `${minutes}m`;
+  }
 };
 
 const showNotification = (message, type) => {
@@ -449,8 +524,21 @@ const showNotification = (message, type) => {
   }, 3000);
 };
 
+const fetchTeacherDepartments = async () => {
+  try {
+    const token = localStorage.getItem('token');
+    const response = await axios.get(`${API_BASE_URL}/enrollments/teacher/departments`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    teacherDepartments.value = response.data;
+  } catch (error) {
+    console.error('Error fetching teacher departments:', error);
+  }
+};
+
 onMounted(() => {
   fetchEvents();
+  fetchTeacherDepartments();
 });
 </script>
 
@@ -525,6 +613,51 @@ onMounted(() => {
   font-size: 0.875rem;
   color: rgba(255, 255, 255, 0.9);
   font-weight: 500;
+}
+
+/* Filter Section */
+.filter-section {
+  background: white;
+  border-radius: 16px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.filter-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: #1F2937;
+  white-space: nowrap;
+}
+
+.filter-icon {
+  width: 20px;
+  height: 20px;
+  color: #667eea;
+}
+
+.department-filter {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: white;
+}
+
+.department-filter:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 /* Loading State */
@@ -700,6 +833,12 @@ onMounted(() => {
   font-size: 0.9375rem;
   font-weight: 500;
   color: #374151;
+}
+
+.location-name {
+  color: #2E7D32;
+  font-weight: 700;
+  font-size: 1rem;
 }
 
 /* Action Buttons */
@@ -1006,6 +1145,12 @@ onMounted(() => {
 
 .student-email {
   color: #9CA3AF;
+}
+
+.text-muted {
+  color: #9CA3AF;
+  font-style: italic;
+  font-size: 0.875rem;
 }
 
 .status-badge {
