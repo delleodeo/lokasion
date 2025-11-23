@@ -16,6 +16,8 @@
 <script>
 import Sidebar from '../components/Sidebar.vue';
 import Navbar from '../components/Navbar.vue';
+import axios from 'axios';
+import { API_BASE_URL } from '../config.js';
 
 export default {
   name: 'Dashboard',
@@ -28,7 +30,27 @@ export default {
       mobileSidebarOpen: false
     };
   },
+  async mounted() {
+    await this.checkFaceRegistration();
+  },
   methods: {
+    async checkFaceRegistration() {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        
+        const response = await axios.get(`${API_BASE_URL}/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        const user = response.data;
+        if (user.role === 'student' && !user.has_face_registered) {
+          this.$router.push('/face-registration');
+        }
+      } catch (error) {
+        console.error('Error checking face registration:', error);
+      }
+    },
     toggleSidebar() {
       this.mobileSidebarOpen = !this.mobileSidebarOpen;
     },

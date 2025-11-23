@@ -78,6 +78,19 @@
             <span>Teacher Requests</span>
           </router-link>
         </li>
+        <li v-if="userRole === 'admin'">
+          <router-link to="/user-management" class="nav-link" active-class="" exact-active-class="router-link-active">
+            <UsersIcon class="nav-icon" />
+            <span>User Management</span>
+          </router-link>
+        </li>
+        <!-- All Users -->
+        <li>
+          <router-link to="/profile" class="nav-link" active-class="" exact-active-class="router-link-active">
+            <UserCircleIcon class="nav-icon" />
+            <span>My Profile</span>
+          </router-link>
+        </li>
       </ul>
     </nav>
 
@@ -90,7 +103,8 @@
 </template>
 
 <script>
-import { HomeIcon, CalendarIcon, ClockIcon, Cog6ToothIcon, PlusCircleIcon, MapPinIcon, BuildingLibraryIcon, ClipboardDocumentCheckIcon, UserGroupIcon } from '@heroicons/vue/24/solid';
+import { HomeIcon, CalendarIcon, ClockIcon, Cog6ToothIcon, PlusCircleIcon, MapPinIcon, BuildingLibraryIcon, ClipboardDocumentCheckIcon, UserGroupIcon, UserCircleIcon } from '@heroicons/vue/24/solid';
+import { UsersIcon } from '@heroicons/vue/24/outline';
 import { jwtDecode } from 'jwt-decode';
 
 export default {
@@ -104,7 +118,9 @@ export default {
     MapPinIcon,
     BuildingLibraryIcon,
     ClipboardDocumentCheckIcon,
-    UserGroupIcon
+    UserGroupIcon,
+    UserCircleIcon,
+    UsersIcon
   },
   props: ['mobileOpen'],
   emits: ['request-close'],
@@ -159,6 +175,24 @@ export default {
   flex-direction: column;
   height: 100vh;
   box-shadow: 4px 0 12px rgba(0, 0, 0, 0.15);
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    left: -100%;
+    top: 0;
+    z-index: 1000;
+    transition: left 0.3s ease;
+  }
+
+  .sidebar.open {
+    left: 0;
+  }
+
+  .sidebar-close {
+    display: block !important;
+  }
 }
 
 .sidebar-header {
@@ -231,6 +265,21 @@ export default {
   color: white;
 }
 
+.nav-link span {
+  margin-left: 0.75rem;
+}
+
+@media (max-width: 768px) {
+  .nav-link {
+    padding: 0.875rem 1.25rem;
+  }
+  
+  .nav-link span {
+    display: inline;
+    font-size: 0.95rem;
+  }
+}
+
 .router-link-active {
   background-color: rgba(255, 255, 255, 0.15);
   color: white;
@@ -259,43 +308,6 @@ export default {
   font-size: 0.875rem;
   font-weight: 600;
   color: white;
-}
-
-@media (max-width: 768px) {
-  /* transform the sidebar into an off-canvas panel on small devices
-     it will be transitioned in by toggling the `.open` class */
-  .sidebar {
-    position: fixed;
-    left: 0;
-    top: 0;
-    transform: translateX(-120%);
-    transition: transform 0.25s ease-in-out;
-    width: 260px;
-    z-index: 60;
-  }
-
-  .sidebar.open {
-    transform: translateX(0);
-  }
-
-  .sidebar-header h2 {
-    display: none;
-  }
-
-  .sidebar-close { display: inline-flex; }
-
-  .nav-link {
-    padding: 1rem;
-    justify-content: center;
-  }
-
-  .nav-link span {
-    display: none;
-  }
-
-  .nav-icon {
-    margin-right: 0;
-  }
 }
 
 /* overlay that'll be controlled by the dashboard parent when sidebar is open */

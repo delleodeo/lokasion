@@ -46,9 +46,22 @@
               <span>Pending Approval</span>
             </div>
 
-            <div v-else-if="society.enrollment_status === 'approved'" class="status-badge approved">
-              <CheckCircleIcon class="status-icon" />
-              <span>Enrolled</span>
+            <div v-else-if="society.enrollment_status === 'approved'" class="action-buttons-group">
+              <div class="status-badge approved">
+                <CheckCircleIcon class="status-icon" />
+                <span>Enrolled</span>
+              </div>
+              <button 
+                @click="cancelEnrollment(society.enrollment_id)"
+                class="btn-leave-society"
+                :disabled="enrolling === society._id"
+                title="Leave society"
+              >
+                <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                </svg>
+                <span>Leave</span>
+              </button>
             </div>
 
             <div v-else-if="society.enrollment_status === 'declined'" class="status-badge declined">

@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Body, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status, UploadFile, File, Form
 from backend.controllers import attendance_controller
 from backend.utils.jwt_handler import decodeJWT
 from pydantic import BaseModel
 from bson import ObjectId
 from bson.errors import InvalidId
+from typing import Optional
 
 class CheckInRequest(BaseModel):
     event_id: str
@@ -21,7 +22,13 @@ router = APIRouter(
 )
 
 @router.post("/checkin", response_description="Check in for an event")
-async def check_in(request: CheckInRequest = Body(...), token: dict = Depends(decodeJWT)):
+async def check_in(
+    event_id: str = Form(...),
+    latitude: float = Form(...),
+    longitude: float = Form(...),
+    image: Optional[UploadFile] = File(None),
+    token: dict = Depends(decodeJWT)
+):
     try:
         if not token:
             raise HTTPException(
@@ -30,7 +37,7 @@ async def check_in(request: CheckInRequest = Body(...), token: dict = Depends(de
             )
         
         try:
-            event_id_obj = ObjectId(request.event_id)
+            event_id_obj = ObjectId(event_id)
         except InvalidId:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -39,11 +46,16 @@ async def check_in(request: CheckInRequest = Body(...), token: dict = Depends(de
         
         current_user_id = token.get("user_id")
         
+        face_image_bytes = None
+        if image:
+            face_image_bytes = await image.read()
+        
         attendance, check_in_status = await attendance_controller.check_in(
             student_id=current_user_id,
             event_id=event_id_obj,
-            user_lat=request.latitude,
-            user_lon=request.longitude
+            user_lat=latitude,
+            user_lon=longitude,
+            face_image_bytes=face_image_bytes
         )
         
         # Handle different check-in statuses
@@ -75,7 +87,13 @@ async def check_in(request: CheckInRequest = Body(...), token: dict = Depends(de
         )
 
 @router.post("/checkout", response_description="Check out from an event")
-async def check_out(request: CheckOutRequest = Body(...), token: dict = Depends(decodeJWT)):
+async def check_out(
+    event_id: str = Form(...),
+    latitude: float = Form(...),
+    longitude: float = Form(...),
+    image: Optional[UploadFile] = File(None),
+    token: dict = Depends(decodeJWT)
+):
     try:
         if not token:
             raise HTTPException(
@@ -84,7 +102,7 @@ async def check_out(request: CheckOutRequest = Body(...), token: dict = Depends(
             )
         
         try:
-            event_id_obj = ObjectId(request.event_id)
+            event_id_obj = ObjectId(event_id)
         except InvalidId:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -93,11 +111,16 @@ async def check_out(request: CheckOutRequest = Body(...), token: dict = Depends(
         
         current_user_id = token.get("user_id")
         
+        face_image_bytes = None
+        if image:
+            face_image_bytes = await image.read()
+        
         attendance, check_out_status = await attendance_controller.check_out(
             student_id=current_user_id,
             event_id=event_id_obj,
-            user_lat=request.latitude,
-            user_lon=request.longitude
+            user_lat=latitude,
+            user_lon=longitude,
+            face_image_bytes=face_image_bytes
         )
         
         # Handle different check-out statuses

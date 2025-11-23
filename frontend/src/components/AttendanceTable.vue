@@ -4,7 +4,9 @@
       <thead>
         <tr>
           <th>Event Name</th>
+          <th>Society</th>
           <th>Check-In Time</th>
+          <th>Check-Out Time</th>
           <th>Status</th>
         </tr>
       </thead>
@@ -13,8 +15,15 @@
           <td data-label="Event Name">
             <span class="event-name">{{ record.event_name || 'Unknown Event' }}</span>
           </td>
+          <td data-label="Society">
+            <span class="society-name">{{ record.department_name || 'Unknown Society' }}</span>
+          </td>
           <td data-label="Check-In Time">
-            <span class="timestamp">{{ formatDateTime(record.timestamp) }}</span>
+            <span class="timestamp">{{ formatDateTime(record.check_in_time || record.timestamp) }}</span>
+          </td>
+          <td data-label="Check-Out Time">
+            <span v-if="record.check_out_time" class="timestamp">{{ formatDateTime(record.check_out_time) }}</span>
+            <span v-else class="not-checked-out">Not checked out</span>
           </td>
           <td data-label="Status">
             <span :class="['status-badge', statusClass(record.status)]">
@@ -93,8 +102,23 @@ tbody tr:hover {
   font-size: 0.95rem;
 }
 
+.society-name {
+  font-weight: 500;
+  color: var(--medium-green);
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
 .timestamp {
   color: var(--gray-600);
+}
+
+.not-checked-out {
+  color: var(--gray-500);
+  font-style: italic;
+  font-size: 0.9rem;
 }
 
 .status-badge {

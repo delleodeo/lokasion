@@ -464,8 +464,7 @@ const exportToExcel = async () => {
 };
 
 const editEvent = (event) => {
-  // TODO: Implement edit functionality
-  showNotification('Edit functionality coming soon', 'error');
+  router.push(`/edit-event/${event._id}`);
 };
 
 const deleteEvent = async (event) => {

@@ -210,3 +210,63 @@ async def export_attendance(department_id: str = None, token: dict = Depends(dec
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to export attendance: {str(e)}",
         )
+
+@router.get("/users", response_description="Get all users")
+async def get_all_users(token: dict = Depends(decodeJWT)):
+    try:
+        if not token or token.get("role") != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin access required",
+            )
+        
+        users = await admin_controller.get_all_users()
+        return users
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch users: {str(e)}",
+        )
+
+@router.get("/users/{user_id}", response_description="Get user profile")
+async def get_user(user_id: str, token: dict = Depends(decodeJWT)):
+    try:
+        if not token or token.get("role") != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin access required",
+            )
+        
+        user = await admin_controller.get_user_profile(user_id)
+        return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch user: {str(e)}",
+        )
+
+@router.put("/users/{user_id}", response_description="Update user details")
+async def update_user(user_id: str, update_data: dict = Body(...), token: dict = Depends(decodeJWT)):
+    try:
+        if not token or token.get("role") != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin access required",
+            )
+        
+        updated_user = await admin_controller.update_user(user_id, update_data, is_admin=True)
+        return {
+            "message": "User updated successfully",
+            "user": updated_user
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update user: {str(e)}",
+        )

@@ -1,11 +1,30 @@
-from backend.database.connection import attendance_collection, event_collection
+from backend.database.connection import attendance_collection, event_collection, user_collection
 from backend.models.attendance_model import Attendance
 from backend.utils.location_validator import is_within_radius
 from backend.utils.serializer import serialize_doc
 from datetime import datetime
 from bson import ObjectId
+import face_recognition
+import numpy as np
+from fastapi.concurrency import run_in_threadpool
+import io
 
-async def check_in(student_id: str, event_id: ObjectId, user_lat: float, user_lon: float):
+def _verify_face_sync(known_encoding, image_bytes):
+    try:
+        unknown_image = face_recognition.load_image_file(io.BytesIO(image_bytes))
+        unknown_encodings = face_recognition.face_encodings(unknown_image)
+        
+        if not unknown_encodings:
+            return False
+            
+        unknown_encoding = unknown_encodings[0]
+        results = face_recognition.compare_faces([np.array(known_encoding)], unknown_encoding, tolerance=0.6)
+        return bool(results[0])
+    except Exception as e:
+        print(f"Face verification error: {e}")
+        return False
+
+async def check_in(student_id: str, event_id: ObjectId, user_lat: float, user_lon: float, face_image_bytes: bytes = None):
     from geopy.distance import geodesic
     
     event = await event_collection.find_one({"_id": event_id})
@@ -76,6 +95,20 @@ async def check_in(student_id: str, event_id: ObjectId, user_lat: float, user_lo
     
     # Only record attendance if student is within range (Present)
     if is_within_radius(user_lat, user_lon, event["latitude"], event["longitude"], event["radius"]):
+        
+        # Face Verification Logic
+        if face_image_bytes:
+            user = await user_collection.find_one({"_id": ObjectId(student_id)})
+            if user:
+                if user.get("face_encoding"):
+                    is_match = await run_in_threadpool(_verify_face_sync, user["face_encoding"], face_image_bytes)
+                    if not is_match:
+                        return None, "Face verification failed. Face does not match registered user."
+                else:
+                    return None, "Face not registered. Please register your face in profile settings."
+            else:
+                return None, "User not found"
+        
         print(f"   [OK] Status: PRESENT (within range)")
         
         # Create or update attendance record
@@ -105,7 +138,7 @@ async def check_in(student_id: str, event_id: ObjectId, user_lat: float, user_lo
         print(f"   [ERROR] Status: OUT OF RANGE (distance exceeds radius)")
         return None, "Out of Range"
 
-async def check_out(student_id: str, event_id: ObjectId, user_lat: float, user_lon: float):
+async def check_out(student_id: str, event_id: ObjectId, user_lat: float, user_lon: float, face_image_bytes: bytes = None):
     from geopy.distance import geodesic
     
     event = await event_collection.find_one({"_id": event_id})
@@ -170,6 +203,20 @@ async def check_out(student_id: str, event_id: ObjectId, user_lat: float, user_l
     
     # Record check-out if within range
     if is_within_radius(user_lat, user_lon, event["latitude"], event["longitude"], event["radius"]):
+        
+        # Face Verification Logic
+        if face_image_bytes:
+            user = await user_collection.find_one({"_id": ObjectId(student_id)})
+            if user:
+                if user.get("face_encoding"):
+                    is_match = await run_in_threadpool(_verify_face_sync, user["face_encoding"], face_image_bytes)
+                    if not is_match:
+                        return None, "Face verification failed. Face does not match registered user."
+                else:
+                    return None, "Face not registered. Please register your face in profile settings."
+            else:
+                return None, "User not found"
+        
         print(f"   [OK] Check-out: PRESENT (within range)")
         
         # Update attendance with check-out
@@ -188,20 +235,33 @@ async def check_out(student_id: str, event_id: ObjectId, user_lat: float, user_l
         return None, "Out of Range"
 
 async def get_attendance_history(student_id: str):
-    """Get attendance history for a student with event names"""
+    """Get attendance history for a student with event names and society/department"""
+    from backend.database.connection import department_collection
+    
     history = []
     async for record in attendance_collection.find({"student_id": student_id}):
-        # Get event details to include event name
+        # Get event details to include event name and department
         event_id = record.get("event_id")
         event_name = "Unknown Event"
+        department_name = "Unknown Society"
         
         if event_id:
             event = await event_collection.find_one({"_id": event_id})
             if event:
                 event_name = event.get("name", "Unknown Event")
+                
+                # Get department/society name
+                department_id = event.get("department_id")
+                if department_id:
+                    if isinstance(department_id, str):
+                        department_id = ObjectId(department_id)
+                    department = await department_collection.find_one({"_id": department_id})
+                    if department:
+                        department_name = department.get("name", "Unknown Society")
         
         record_data = serialize_doc(record)
         record_data["event_name"] = event_name
+        record_data["department_name"] = department_name
         history.append(record_data)
     
     return history

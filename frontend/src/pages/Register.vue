@@ -22,6 +22,19 @@
         </div>
 
         <div class="input-group">
+          <label for="middleName">Middle Name (Optional)</label>
+          <div class="input-wrapper">
+            <UserIcon class="input-icon" />
+            <input 
+              type="text" 
+              id="middleName" 
+              v-model="middleName" 
+              placeholder="Smith"
+            >
+          </div>
+        </div>
+
+        <div class="input-group">
           <label for="lastName">Last Name</label>
           <div class="input-wrapper">
             <UserIcon class="input-icon" />
@@ -89,6 +102,23 @@
           </div>
         </div>
 
+        <Transition name="fade">
+          <div v-if="role === 'admin'" class="input-group admin-code-field">
+            <label for="adminCode">Admin Secret Code</label>
+            <div class="input-wrapper">
+              <LockClosedIcon class="input-icon" />
+              <input 
+                type="password" 
+                id="adminCode" 
+                v-model="adminSecretCode" 
+                placeholder="Enter admin secret code"
+                required
+              >
+            </div>
+            <small class="input-hint">Required for administrator registration</small>
+          </div>
+        </Transition>
+
         <button type="submit" class="register-button">Create Account</button>
         
         <div v-if="error" class="error-message">
@@ -120,11 +150,13 @@ export default {
   data() {
     return {
       firstName: '',
+      middleName: '',
       lastName: '',
       idNumber: '',
       email: '',
       password: '',
       role: 'student',
+      adminSecretCode: '',
       error: ''
     };
   },
@@ -133,11 +165,19 @@ export default {
       try {
         this.error = '';
         
-        // Combine first and last name for backward compatibility
-        const fullName = `${this.firstName} ${this.lastName}`;
+        // Validate admin secret code if role is admin
+        if (this.role === 'admin' && !this.adminSecretCode) {
+          this.error = 'Admin secret code is required for administrator registration';
+          return;
+        }
+        
+        // Combine names for backward compatibility
+        const nameParts = [this.firstName, this.middleName, this.lastName].filter(Boolean);
+        const fullName = nameParts.join(' ');
         
         console.log('Registering with data:', {
           first_name: this.firstName,
+          middle_name: this.middleName,
           last_name: this.lastName,
           id_number: this.idNumber,
           name: fullName,
@@ -145,8 +185,9 @@ export default {
           role: this.role
         });
         
-        const response = await axios.post(`${API_BASE_URL}/auth/register`, {
+        const payload = {
           first_name: this.firstName,
+          middle_name: this.middleName || null,
           last_name: this.lastName,
           id_number: this.idNumber,
           name: fullName,
@@ -154,7 +195,14 @@ export default {
           password: this.password,
           role: this.role,
           department_id: null
-        });
+        };
+
+        // Add admin secret code if role is admin
+        if (this.role === 'admin') {
+          payload.admin_secret_code = this.adminSecretCode;
+        }
+        
+        const response = await axios.post(`${API_BASE_URL}/auth/register`, payload);
         
         console.log('Registration successful:', response.data);
         alert(`Account created successfully as ${this.role}!`);
@@ -219,6 +267,28 @@ export default {
   color: var(--gray-800);
   margin-bottom: 0.5rem;
   font-size: 0.95rem;
+}
+
+.input-hint {
+  color: var(--gray-600);
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+  font-style: italic;
+}
+
+.admin-code-field {
+  background: #fff3cd;
+  padding: 1rem;
+  border-radius: 8px;
+  border: 2px solid #ffc107;
+}
+
+.admin-code-field label {
+  color: #856404;
+}
+
+.admin-code-field .input-hint {
+  color: #856404;
 }
 
 .input-wrapper {
@@ -319,6 +389,18 @@ export default {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* Vue Transitions */
+.fade-enter-active,
+.fade-leave-active {
+  transition: all 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
 }
 
 @media (max-width: 768px) {

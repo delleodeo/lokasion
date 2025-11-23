@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from contextlib import asynccontextmanager
 
 # Add parent directory to path so backend module can be imported
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -9,7 +10,37 @@ from backend.routes import auth_routes, event_routes, attendance_routes, admin_r
 from fastapi.middleware.cors import CORSMiddleware
 from backend.database.connection import client
 
-app = FastAPI(title="Location-Based Attendance System", version="1.0.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    try:
+        await client.admin.command('ping')
+        print("\n" + "="*60)
+        print("[OK] DATABASE CONNECTION SUCCESSFUL")
+        print("="*60)
+        print("📊 Location-Based Attendance System is Ready!")
+        print("📍 Backend running on: http://localhost:8000")
+        print("📖 API Documentation: http://localhost:8000/docs")
+        print("="*60 + "\n")
+    except Exception as e:
+        print("\n" + "="*60)
+        print("❌ DATABASE CONNECTION FAILED")
+        print("="*60)
+        print(f"Error: {str(e)}")
+        print("⚠️  Make sure MongoDB is running and accessible")
+        print("="*60 + "\n")
+    
+    yield
+    
+    # Shutdown
+    client.close()
+    print("\n✋ Database connection closed")
+
+app = FastAPI(
+    title="Location-Based Attendance System",
+    version="1.0.0",
+    lifespan=lifespan
+)
 
 origins = [
     "http://localhost:5173",
@@ -32,33 +63,6 @@ app.include_router(event_routes.router, tags=["Events"])
 app.include_router(attendance_routes.router, tags=["Attendance"])
 app.include_router(admin_routes.router, tags=["Admin"])
 app.include_router(enrollment_routes.router, tags=["Enrollments"])
-
-@app.on_event("startup")
-async def startup_event():
-    """Run on application startup"""
-    try:
-        # Test database connection
-        await client.admin.command('ping')
-        print("\n" + "="*60)
-        print("[OK] DATABASE CONNECTION SUCCESSFUL")
-        print("="*60)
-        print("📊 Location-Based Attendance System is Ready!")
-        print("📍 Backend running on: http://localhost:8001")
-        print("📖 API Documentation: http://localhost:8001/docs")
-        print("="*60 + "\n")
-    except Exception as e:
-        print("\n" + "="*60)
-        print("❌ DATABASE CONNECTION FAILED")
-        print("="*60)
-        print(f"Error: {str(e)}")
-        print("⚠️  Make sure MongoDB is running and accessible")
-        print("="*60 + "\n")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Run on application shutdown"""
-    client.close()
-    print("\n✋ Database connection closed")
 
 @app.get("/")
 def read_root():
@@ -88,4 +92,4 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True)

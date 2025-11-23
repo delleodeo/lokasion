@@ -202,6 +202,46 @@ async def get_events(token: dict = Depends(decodeJWT)):
             detail=f"Failed to fetch events: {str(e)}",
         )
 
+@router.put("/{event_id}", response_description="Update an event")
+async def update_event(event_id: str, event: Event = Body(...), token: dict = Depends(decodeJWT)):
+    try:
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired token",
+            )
+        
+        # Only teachers can update events
+        if token.get("role") != "teacher":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only teachers can update events",
+            )
+        
+        teacher_id = token.get("user_id")
+        
+        # Prepare update data
+        event_dict = event.dict(by_alias=True, exclude_unset=True)
+        # Remove _id from update data if present
+        event_dict.pop("_id", None)
+        event_dict.pop("id", None)
+        
+        # Update the event (controller will check ownership)
+        updated_event = await event_controller.update_event(event_id, event_dict, teacher_id)
+        
+        return {
+            "message": "Event updated successfully",
+            "event": updated_event
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] Update event error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update event: {str(e)}",
+        )
+
 @router.delete("/{event_id}", response_description="Delete an event")
 async def delete_event(event_id: str, token: dict = Depends(decodeJWT)):
     try:

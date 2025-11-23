@@ -1,7 +1,13 @@
 import bcrypt
+import face_recognition
+import numpy as np
 from backend.database.connection import user_collection
 from backend.models.user_model import User
 from backend.utils.jwt_handler import signJWT
+from fastapi import UploadFile, HTTPException
+from fastapi.concurrency import run_in_threadpool
+from bson import ObjectId
+import io
 
 def get_password_hash(password: str) -> str:
     """Hash a password using bcrypt."""
@@ -52,11 +58,19 @@ async def register_user(user_data: dict):
         print(f"[REGISTER] Registering user: {user_data.get('email')}")
         print(f"[REGISTER] User data received:")
         print(f"   First Name: {user_data.get('first_name')}")
+        print(f"   Middle Name: {user_data.get('middle_name')}")
         print(f"   Last Name: {user_data.get('last_name')}")
         print(f"   ID Number: {user_data.get('id_number')}")
-        print(f"   Full Name: {user_data.get('name')}")
         print(f"   Email: {user_data.get('email')}")
         print(f"   Role: {user_data.get('role')}")
+        
+        # Check if id_number already exists
+        existing_user = await user_collection.find_one({"id_number": user_data.get('id_number')})
+        if existing_user:
+            raise HTTPException(
+                status_code=400,
+                detail=f"ID Number {user_data.get('id_number')} is already registered. Please use a different ID number."
+            )
         
         # Hash the password using bcrypt
         user_data['password'] = get_password_hash(user_data['password'])
@@ -100,3 +114,39 @@ async def login_user(email: str, password: str):
     except Exception as e:
         print(f"[ERROR] Login exception: {str(e)}")
         raise Exception(f"Login error: {str(e)}")
+
+def _get_face_encodings(image_bytes):
+    """Helper to run face recognition in a thread pool"""
+    image = face_recognition.load_image_file(io.BytesIO(image_bytes))
+    return face_recognition.face_encodings(image)
+
+async def register_face(user_id: str, image_file: UploadFile):
+    """Register a face for a user."""
+    try:
+        contents = await image_file.read()
+        
+        # Run CPU-intensive face recognition in a separate thread
+        face_encodings = await run_in_threadpool(_get_face_encodings, contents)
+        
+        if not face_encodings:
+            return False, "No face found in the image"
+            
+        if len(face_encodings) > 1:
+            return False, "Multiple faces found. Please ensure only your face is visible."
+            
+        # Get the first face encoding
+        face_encoding = face_encodings[0].tolist()
+        
+        # Update user
+        result = await user_collection.update_one(
+            {"_id": ObjectId(user_id)},
+            {"$set": {"face_encoding": face_encoding}}
+        )
+        
+        if result.matched_count == 0:
+            return False, "User not found"
+            
+        return True, "Face registered successfully"
+    except Exception as e:
+        print(f"Face registration error: {e}")
+        return False, str(e)

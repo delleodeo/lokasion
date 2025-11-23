@@ -598,7 +598,7 @@ async def review_enrollment(
 
 @router.delete("/{enrollment_id}", response_description="Cancel/Leave enrollment")
 async def cancel_enrollment(enrollment_id: str, token: dict = Depends(decodeJWT)):
-    """Allow teachers to cancel their enrollment in a society"""
+    """Allow students and teachers to cancel/leave their enrollment in a society"""
     try:
         if not token:
             raise HTTPException(
@@ -625,8 +625,8 @@ async def cancel_enrollment(enrollment_id: str, token: dict = Depends(decodeJWT)
                 detail="You can only cancel your own enrollments",
             )
         
-        # Teachers can cancel their approved enrollments
-        if user_role == "teacher" and enrollment["status"] == "approved":
+        # Both students and teachers can leave approved enrollments
+        if enrollment["status"] == "approved":
             # Delete the enrollment
             result = await enrollment_collection.delete_one({"_id": ObjectId(enrollment_id)})
             

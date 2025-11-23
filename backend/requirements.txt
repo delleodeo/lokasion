@@ -6,3 +6,8 @@ geopy
 python-jose[cryptography]
 passlib[bcrypt]
 python-decouple
+face_recognition
+numpy
+email-validator
+PyJWT
+openpyxl

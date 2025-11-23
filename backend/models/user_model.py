@@ -28,6 +28,7 @@ class User(BaseModel):
     
     id: Optional[PyObjectId] = Field(default=None, alias="_id")
     first_name: str
+    middle_name: Optional[str] = None
     last_name: str
     id_number: str
     name: Optional[str] = None  # Keep for backward compatibility
@@ -35,5 +36,6 @@ class User(BaseModel):
     password: str
     role: str  # admin, teacher, student
     department_id: Optional[str] = None
+    face_encoding: Optional[list[float]] = None # Store face encoding as a list of floats
 class UserInDB(User):
     hashed_password: str

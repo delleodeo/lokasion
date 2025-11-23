@@ -133,6 +133,48 @@
       <XMarkIcon v-else class="status-icon" />
       {{ statusMessage }}
     </div>
+
+    <!-- Camera Modal - Teleported to body to prevent parent hover effects -->
+    <Teleport to="body">
+      <Transition name="modal-fade">
+        <div v-if="showCameraModal" class="modal-overlay" @click.self="closeCameraModal">
+          <div class="modal-content">
+            <button @click="closeCameraModal" class="close-button">✕</button>
+            <h3>Face Verification</h3>
+            <Transition name="text-fade" mode="out-in">
+              <p v-if="!isCapturing" key="instruction">Position your face within the circle</p>
+              <p v-else key="scanning" class="scanning-text">{{ scanningMessage }}</p>
+            </Transition>
+            <div class="camera-container">
+              <video ref="video" autoplay playsinline muted class="camera-feed"></video>
+              <canvas ref="canvas" class="camera-feed-hidden"></canvas>
+              <Transition name="fade">
+                <div v-if="!isCapturing" class="face-guide" key="guide">
+                  <div class="guide-circle"></div>
+                </div>
+              </Transition>
+              <Transition name="fade">
+                <div v-if="isCapturing" class="scanning-overlay" key="scanning">
+                  <div class="countdown-circle">
+                    <span class="countdown-number">{{ countdown }}</span>
+                  </div>
+                  <div class="scanning-line"></div>
+                </div>
+              </Transition>
+            </div>
+            <Transition name="fade">
+              <div v-if="!isCapturing" class="modal-actions" key="actions">
+                <button @click="closeCameraModal" class="btn-secondary">Cancel</button>
+                <button @click="startAutoCapture" class="btn-primary" :disabled="!cameraReady">
+                  <span v-if="cameraReady">Start Verification</span>
+                  <span v-else>Loading Camera...</span>
+                </button>
+              </div>
+            </Transition>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -169,7 +211,16 @@ export default {
       isLoading: false,
       hasCheckedIn: false,
       hasCheckedOut: false,
-      currentTime: new Date()
+      currentTime: new Date(),
+      showCameraModal: false,
+      stream: null,
+      cameraReady: false,
+      isCapturing: false,
+      countdown: 3,
+      countdownInterval: null,
+      capturedImage: null,
+      scanningMessage: 'Initializing...',
+      checkoutMode: false
     };
   },
   computed: {
@@ -257,6 +308,7 @@ export default {
     if (this.timeInterval) {
       clearInterval(this.timeInterval);
     }
+    this.stopCamera();
   },
   methods: {
     async checkAttendanceStatus() {
@@ -291,7 +343,165 @@ export default {
         hour12: true
       });
     },
-    checkIn() {
+    async checkIn() {
+      // Open camera modal instead of direct check-in
+      this.showCameraModal = true;
+      await this.startCamera();
+    },
+    async startCamera() {
+      try {
+        this.cameraReady = false;
+        this.stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: 'user',
+            frameRate: { ideal: 30 }
+          } 
+        });
+        
+        await this.$nextTick();
+        
+        if (this.$refs.video) {
+          const video = this.$refs.video;
+          video.srcObject = this.stream;
+          
+          await new Promise((resolve) => {
+            video.onloadedmetadata = () => {
+              video.play().then(() => {
+                this.cameraReady = true;
+                resolve();
+              }).catch(err => {
+                console.error('Error playing video:', err);
+                resolve();
+              });
+            };
+          });
+        }
+      } catch (error) {
+        console.error('Error accessing camera:', error);
+        this.statusMessage = 'Could not access camera. Please allow camera access.';
+        this.statusClass = 'status-error';
+        this.showCameraModal = false;
+      }
+    },
+    stopCamera() {
+      if (this.stream) {
+        this.stream.getTracks().forEach(track => track.stop());
+        this.stream = null;
+      }
+      if (this.countdownInterval) {
+        clearInterval(this.countdownInterval);
+        this.countdownInterval = null;
+      }
+    },
+    closeCameraModal() {
+      this.isCapturing = false;
+      if (this.countdownInterval) {
+        clearInterval(this.countdownInterval);
+        this.countdownInterval = null;
+      }
+      this.stopCamera();
+      // Delay state reset to allow smooth transition
+      setTimeout(() => {
+        this.showCameraModal = false;
+        this.cameraReady = false;
+        this.countdown = 3;
+        this.capturedImage = null;
+        this.checkoutMode = false;
+      }, 300);
+    },
+    startAutoCapture() {
+      if (!this.cameraReady || this.isCapturing) return;
+      
+      this.isCapturing = true;
+      this.countdown = 3;
+      this.scanningMessage = 'Get ready...';
+      
+      // Use requestAnimationFrame for smoother updates
+      let lastTime = Date.now();
+      
+      this.countdownInterval = setInterval(() => {
+        const currentTime = Date.now();
+        const elapsed = currentTime - lastTime;
+        
+        if (elapsed >= 1000) {
+          this.countdown--;
+          lastTime = currentTime;
+          
+          if (this.countdown > 0) {
+            this.scanningMessage = `Capturing in ${this.countdown}...`;
+          } else {
+            this.scanningMessage = 'Capturing...';
+            clearInterval(this.countdownInterval);
+            this.countdownInterval = null;
+            
+            // Small delay for smooth capture
+            requestAnimationFrame(() => {
+              setTimeout(() => {
+                this.captureAndCheckIn();
+              }, 300);
+            });
+          }
+        }
+      }, 100);
+    },
+    async captureAndCheckIn() {
+      const video = this.$refs.video;
+      const canvas = this.$refs.canvas;
+      
+      if (!video) {
+        // Reset state if video is not available
+        this.resetCameraState();
+        return;
+      }
+      
+      try {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const context = canvas.getContext('2d');
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        const imageBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg'));
+        
+        this.stopCamera();
+        this.showCameraModal = false;
+        
+        // Reset capturing state
+        this.isCapturing = false;
+        this.countdown = 3;
+        
+        if (this.checkoutMode) {
+          this.performCheckOut(imageBlob);
+          this.checkoutMode = false;
+        } else {
+          this.performCheckIn(imageBlob);
+        }
+      } catch (error) {
+        console.error('Error capturing image:', error);
+        this.resetCameraState();
+        this.statusMessage = 'Failed to capture image. Please try again.';
+        this.statusClass = 'status-error';
+      }
+    },
+    resetCameraState() {
+      // Clear countdown interval if running
+      if (this.countdownInterval) {
+        clearInterval(this.countdownInterval);
+        this.countdownInterval = null;
+      }
+      
+      // Reset all camera-related state
+      this.isCapturing = false;
+      this.countdown = 3;
+      this.cameraReady = false;
+      this.capturedImage = null;
+      this.scanningMessage = 'Initializing...';
+      
+      // Stop camera stream
+      this.stopCamera();
+    },
+    performCheckIn(imageBlob) {
       this.isLoading = true;
       this.statusMessage = 'Getting your location...';
       this.statusClass = 'status-loading';
@@ -300,20 +510,22 @@ export default {
         const { latitude, longitude, accuracy } = position.coords;
         
         console.log('📍 Student location:', { latitude, longitude, accuracy });
-        console.log('📍 Event location:', { 
-          latitude: this.event.latitude, 
-          longitude: this.event.longitude,
-          radius: this.event.radius 
-        });
         
         try {
           const token = localStorage.getItem('token');
-          const response = await axios.post(`${API_BASE_URL}/attendance/checkin`, {
-            event_id: this.event._id,
-            latitude,
-            longitude
-          }, {
-            headers: { Authorization: `Bearer ${token}` }
+          const formData = new FormData();
+          formData.append('event_id', this.event._id);
+          formData.append('latitude', latitude);
+          formData.append('longitude', longitude);
+          if (imageBlob) {
+            formData.append('image', imageBlob, 'checkin.jpg');
+          }
+          
+          const response = await axios.post(`${API_BASE_URL}/attendance/checkin`, formData, {
+            headers: { 
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'multipart/form-data'
+            }
           });
           
           this.status = response.data.status;
@@ -327,6 +539,8 @@ export default {
           this.status = 'Error';
           this.statusMessage = error.response?.data?.detail || 'Check-in failed. Please try again.';
           this.statusClass = 'status-error';
+          // Reset camera state so user can try again
+          this.resetCameraState();
         } finally {
           this.isLoading = false;
         }
@@ -352,7 +566,13 @@ export default {
         maximumAge: 0
       });
     },
-    checkOut() {
+    async checkOut() {
+      // Open camera modal for checkout as well
+      this.showCameraModal = true;
+      this.checkoutMode = true;
+      await this.startCamera();
+    },
+    async performCheckOut(imageBlob) {
       this.isLoading = true;
       this.statusMessage = 'Getting your location...';
       this.statusClass = 'status-loading';
@@ -362,12 +582,19 @@ export default {
         
         try {
           const token = localStorage.getItem('token');
-          const response = await axios.post(`${API_BASE_URL}/attendance/checkout`, {
-            event_id: this.event._id,
-            latitude,
-            longitude
-          }, {
-            headers: { Authorization: `Bearer ${token}` }
+          const formData = new FormData();
+          formData.append('event_id', this.event._id);
+          formData.append('latitude', latitude);
+          formData.append('longitude', longitude);
+          if (imageBlob) {
+            formData.append('image', imageBlob, 'checkout.jpg');
+          }
+          
+          const response = await axios.post(`${API_BASE_URL}/attendance/checkout`, formData, {
+            headers: { 
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'multipart/form-data'
+            }
           });
           
           this.status = response.data.status;
@@ -380,6 +607,8 @@ export default {
           console.error('Check-out failed:', error);
           this.statusMessage = error.response?.data?.detail || 'Check-out failed. Please try again.';
           this.statusClass = 'status-error';
+          // Reset camera state so user can try again
+          this.resetCameraState();
         } finally {
           this.isLoading = false;
         }
@@ -727,5 +956,295 @@ export default {
   }
 
   .check-in-button, .check-out-button { width: 100%; }
+}
+
+/* Camera Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  background: white;
+  padding: 2rem;
+  border-radius: 20px;
+  width: 90%;
+  max-width: 600px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+
+.close-button {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  color: #6b7280;
+  cursor: pointer;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.close-button:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.modal-content h3 {
+  color: var(--dark-green);
+  margin-bottom: 0.5rem;
+  font-size: 1.5rem;
+}
+
+.modal-content p {
+  color: #6b7280;
+  margin-bottom: 1.5rem;
+  font-size: 0.95rem;
+}
+
+.scanning-text {
+  color: var(--medium-green);
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.camera-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4/3;
+  background: #000;
+  border-radius: 16px;
+  overflow: hidden;
+  margin: 1.5rem 0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.camera-feed {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  /* Prevent layout shifts */
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.camera-feed-hidden {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: none;
+}
+
+.face-guide {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.guide-circle {
+  width: 60%;
+  height: 70%;
+  border: 3px dashed rgba(16, 185, 129, 0.8);
+  border-radius: 50%;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    border-color: rgba(16, 185, 129, 0.6);
+    transform: scale(1);
+  }
+  50% {
+    border-color: rgba(16, 185, 129, 1);
+    transform: scale(1.05);
+  }
+}
+
+.scanning-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+  /* Hardware acceleration */
+  transform: translateZ(0);
+  will-change: opacity, transform;
+}
+
+.countdown-circle {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(16, 185, 129, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 0 40px rgba(16, 185, 129, 0.6);
+  /* Hardware acceleration */
+  transform: translateZ(0);
+}
+
+.countdown-number {
+  font-size: 3rem;
+  font-weight: 700;
+  color: white;
+  /* Smooth font rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0) translateZ(0);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) translateZ(0);
+    opacity: 1;
+  }
+}
+
+.scanning-line {
+  position: absolute;
+  width: 80%;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, rgba(16, 185, 129, 1), transparent);
+  animation: scan 2s linear infinite;
+}
+
+@keyframes scan {
+  0% {
+    top: 0;
+  }
+  100% {
+    top: 100%;
+  }
+}
+
+.modal-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.btn-primary, .btn-secondary {
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.3s ease;
+  flex: 1;
+  max-width: 180px;
+}
+
+.btn-primary {
+  background: var(--medium-green);
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--dark-green);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.btn-secondary:hover {
+  background: #d1d5db;
+}
+
+/* Vue Transition Styles */
+.modal-fade-enter-active,
+.modal-fade-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.modal-fade-enter-from {
+  opacity: 0;
+}
+
+.modal-fade-leave-to {
+  opacity: 0;
+}
+
+.modal-fade-enter-active .modal-content {
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.modal-fade-enter-from .modal-content {
+  transform: scale(0.9) translateY(-20px);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease, transform 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.fade-enter-from {
+  transform: translateY(10px);
+}
+
+.text-fade-enter-active,
+.text-fade-leave-active {
+  transition: opacity 0.25s ease;
+}
+
+.text-fade-enter-from,
+.text-fade-leave-to {
+  opacity: 0;
+}
+
+/* Smooth scanning line animation with hardware acceleration */
+.scanning-line {
+  transform: translateZ(0);
+  will-change: transform;
 }
 </style>
