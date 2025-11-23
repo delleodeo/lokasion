@@ -19,14 +19,14 @@ const routes = [
     component: Dashboard,
     children: [
       { path: '', redirect: '/events' },
-      { path: '/events', component: Events },
-      { path: '/societies', component: Societies },
-      { path: '/attendance', component: Attendance },
+      { path: '/events', component: Events, meta: { inDashboard: true } },
+      { path: '/societies', component: Societies, meta: { inDashboard: true } },
+      { path: '/attendance', component: Attendance, meta: { inDashboard: true } },
       { path: '/admin', component: AdminPanel, meta: { requiresAdmin: true } },
-      { path: '/create-event', name: 'CreateEvent', component: CreateEvent, meta: { requiresTeacher: true }, props: true },
-      { path: '/enrollments', component: EnrollmentManagement, meta: { requiresTeacher: true } },
-      { path: '/teacher-enrollments', component: TeacherEnrollmentManagement, meta: { requiresAdmin: true } },
-      { path: '/teacher-events', component: TeacherEvents, meta: { requiresTeacher: true } },
+      { path: '/create-event', name: 'CreateEvent', component: CreateEvent, meta: { requiresTeacher: true, inDashboard: true }, props: true },
+      { path: '/enrollments', component: EnrollmentManagement, meta: { requiresTeacher: true, inDashboard: true } },
+      { path: '/teacher-enrollments', component: TeacherEnrollmentManagement, meta: { requiresAdmin: true, inDashboard: true } },
+      { path: '/teacher-events', component: TeacherEvents, meta: { requiresTeacher: true, inDashboard: true } },
     ]
   },
   { path: '/', redirect: '/login' }

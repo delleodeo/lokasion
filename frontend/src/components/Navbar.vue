@@ -1,6 +1,13 @@
 <template>
   <nav class="navbar">
     <div class="navbar-content">
+      <button class="hamburger-button show-mobile" @click="$emit('toggle-sidebar')" aria-label="Toggle navigation" title="Toggle navigation">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M4 6H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M4 12H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M4 18H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
       <div class="navbar-title">
         <h1>{{ pageTitle }}</h1>
       </div>
@@ -31,6 +38,7 @@ export default {
   components: {
     ArrowRightOnRectangleIcon
   },
+  emits: ['toggle-sidebar'],
   data() {
     return {
       userName: 'User',
@@ -97,6 +105,22 @@ export default {
   justify-content: space-between;
   align-items: center;
   max-width: 100%;
+}
+
+.hamburger-button {
+  display: none;
+  background: none;
+  border: none;
+  padding: 0.5rem;
+  margin-right: 0.75rem;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--gray-800);
+}
+
+.hamburger-button:focus {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(11,110,253,0.12);
 }
 
 .navbar-title h1 {
@@ -184,5 +208,6 @@ export default {
   .user-details {
     display: none;
   }
+  .hamburger-button { display: inline-flex; }
 }
 </style>

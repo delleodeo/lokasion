@@ -205,6 +205,9 @@ async def get_pending_enrollments(token: dict = Depends(decodeJWT)):
                     
                     enrollment["user_name"] = user.get("name", "Unknown")
                     enrollment["user_email"] = user.get("email", "Unknown")
+                    # include the student's registration-entered ID number (fallback to 'N/A')
+                    id_num = user.get("id_number")
+                    enrollment["user_id_number"] = str(id_num) if id_num else "N/A"
                     enrollment["user_role"] = user.get("role", "Unknown")
                     enrollments.append(enrollment)
         else:
@@ -249,6 +252,10 @@ async def get_pending_enrollments(token: dict = Depends(decodeJWT)):
                     enrollment["user_id"] = str(user["_id"])
                     enrollment["user_name"] = user.get("name", "Unknown")
                     enrollment["user_email"] = user.get("email", "Unknown")
+                    # include student's registration id number so teachers can see it when reviewing
+                    print(f"DEBUG: User {user.get('email')} - id_number: {user.get('id_number')}")
+                    id_num = user.get("id_number")
+                    enrollment["user_id_number"] = str(id_num) if id_num else "N/A"
                     enrollment["user_role"] = user.get("role", "Unknown")
                     enrollment["department_id"] = str(enrollment.get("department_id", ""))
                     enrollments.append(enrollment)
@@ -329,13 +336,16 @@ async def get_approved_enrollments(department_id: str = None, token: dict = Depe
                 else:
                     full_name = user.get("name", "Unknown")
                 
+                id_num = user.get("id_number")
+                user_id_number = str(id_num) if id_num else "N/A"
+                
                 result.append({
                     "enrollment_id": str(enrollment["_id"]),
                     "user_id": str(user["_id"]),
                     "user_name": full_name,
                     "user_first_name": first_name,
                     "user_last_name": last_name,
-                    "user_id_number": user.get("id_number", "N/A"),
+                    "user_id_number": user_id_number,
                     "user_email": user.get("email", "Unknown"),
                     "user_role": user.get("role", "Unknown"),
                     "department_name": dept.get("name", "Unknown") if dept else "Unknown",

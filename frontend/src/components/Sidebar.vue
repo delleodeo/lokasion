@@ -1,69 +1,79 @@
 <template>
-  <aside class="sidebar">
+  <aside :class="['sidebar', { open: mobileOpen }]">
     <div class="sidebar-header">
+      <button class="sidebar-close show-mobile" @click="$emit('request-close')" aria-label="Close navigation" title="Close navigation">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M6 18L18 6M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
       <div class="logo-badge">
         <MapPinIcon class="logo-icon" />
       </div>
       <h2>Attendance</h2>
     </div>
 
-    <nav class="navigation">
+    <nav class="navigation" @click="hideOnMobile">
       <ul>
         <li>
-          <router-link to="/dashboard" class="nav-link">
+          <!-- Dashboard should appear active when we are anywhere in the dashboard area -->
+          <router-link
+            to="/dashboard"
+            class="nav-link"
+            :class="{ 'router-link-active': isDashboardActive }"
+          >
             <HomeIcon class="nav-icon" />
             <span>Dashboard</span>
           </router-link>
         </li>
         <!-- Student & Teacher -->
         <li v-if="userRole === 'student' || userRole === 'teacher'">
-          <router-link to="/societies" class="nav-link">
+          <router-link to="/societies" class="nav-link" active-class="" exact-active-class="router-link-active">
             <BuildingLibraryIcon class="nav-icon" />
             <span>Societies</span>
           </router-link>
         </li>
         <!-- Student & Teacher -->
         <li v-if="userRole === 'student' || userRole === 'teacher'">
-          <router-link to="/events" class="nav-link">
+          <router-link to="/events" class="nav-link" active-class="" exact-active-class="router-link-active">
             <CalendarIcon class="nav-icon" />
             <span>Events</span>
           </router-link>
         </li>
         <!-- Student -->
         <li v-if="userRole === 'student'">
-          <router-link to="/attendance" class="nav-link">
+          <router-link to="/attendance" class="nav-link" active-class="" exact-active-class="router-link-active">
             <ClockIcon class="nav-icon" />
             <span>My Attendance</span>
           </router-link>
         </li>
         <!-- Teacher -->
         <li v-if="userRole === 'teacher'">
-          <router-link to="/create-event" class="nav-link">
+          <router-link to="/create-event" class="nav-link" active-class="" exact-active-class="router-link-active">
             <PlusCircleIcon class="nav-icon" />
             <span>Create Event</span>
           </router-link>
         </li>
         <li v-if="userRole === 'teacher'">
-          <router-link to="/teacher-events" class="nav-link">
+          <router-link to="/teacher-events" class="nav-link" active-class="" exact-active-class="router-link-active">
             <CalendarIcon class="nav-icon" />
             <span>My Events</span>
           </router-link>
         </li>
         <li v-if="userRole === 'teacher'">
-          <router-link to="/enrollments" class="nav-link">
+          <router-link to="/enrollments" class="nav-link" active-class="" exact-active-class="router-link-active">
             <ClipboardDocumentCheckIcon class="nav-icon" />
             <span>Enrollments</span>
           </router-link>
         </li>
          <!-- Admin -->
         <li v-if="userRole === 'admin'">
-          <router-link to="/admin" class="nav-link">
+          <router-link to="/admin" class="nav-link" active-class="" exact-active-class="router-link-active">
             <Cog6ToothIcon class="nav-icon" />
             <span>Admin Panel</span>
           </router-link>
         </li>
         <li v-if="userRole === 'admin'">
-          <router-link to="/teacher-enrollments" class="nav-link">
+          <router-link to="/teacher-enrollments" class="nav-link" active-class="" exact-active-class="router-link-active">
             <UserGroupIcon class="nav-icon" />
             <span>Teacher Requests</span>
           </router-link>
@@ -96,10 +106,20 @@ export default {
     ClipboardDocumentCheckIcon,
     UserGroupIcon
   },
+  props: ['mobileOpen'],
+  emits: ['request-close'],
   data() {
     return {
       userRole: ''
     };
+  },
+  computed: {
+    isDashboardActive() {
+      // Active when user is exactly on /dashboard or when the current route has been marked as part of the dashboard
+      const path = this.$route.path;
+      if (path === '/dashboard') return true;
+      return !!(this.$route.meta && this.$route.meta.inDashboard);
+    }
   },
   computed: {
     roleName() {
@@ -116,6 +136,15 @@ export default {
     if (token) {
       const decodedToken = jwtDecode(token);
       this.userRole = decodedToken.role;
+    }
+  },
+
+  methods: {
+    hideOnMobile() {
+      // Only request close for narrow screens — keep desktop unchanged
+      if (window.innerWidth <= 768) {
+        this.$emit('request-close');
+      }
     }
   }
 }
@@ -137,6 +166,20 @@ export default {
   text-align: center;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
+
+.sidebar-close {
+  display: none;
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  background: none;
+  border: none;
+  color: white;
+  padding: 0.5rem;
+  border-radius: 8px;
+}
+
+.sidebar-close svg { width: 18px; height: 18px; }
 
 .logo-badge {
   width: 60px;
@@ -219,13 +262,27 @@ export default {
 }
 
 @media (max-width: 768px) {
+  /* transform the sidebar into an off-canvas panel on small devices
+     it will be transitioned in by toggling the `.open` class */
   .sidebar {
-    width: 70px;
+    position: fixed;
+    left: 0;
+    top: 0;
+    transform: translateX(-120%);
+    transition: transform 0.25s ease-in-out;
+    width: 260px;
+    z-index: 60;
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
   }
 
   .sidebar-header h2 {
     display: none;
   }
+
+  .sidebar-close { display: inline-flex; }
 
   .nav-link {
     padding: 1rem;
@@ -239,5 +296,21 @@ export default {
   .nav-icon {
     margin-right: 0;
   }
+}
+
+/* overlay that'll be controlled by the dashboard parent when sidebar is open */
+.sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.35);
+    z-index: 50;
+    display: none; /* parent should toggle */
+  }
+  .sidebar-backdrop.show { display: block; }
 }
 </style>

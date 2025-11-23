@@ -1,8 +1,9 @@
 <template>
   <div class="dashboard-layout">
-    <Sidebar />
-    <div class="main-content">
-      <Navbar />
+    <Sidebar :mobile-open="mobileSidebarOpen" @request-close="closeSidebar" />
+    <div :class="['sidebar-backdrop', { show: mobileSidebarOpen }]" @click="closeSidebar" aria-hidden="true"></div>
+    <div class="main-content" :aria-hidden="mobileSidebarOpen ? 'true' : 'false'">
+      <Navbar @toggle-sidebar="toggleSidebar" />
       <main class="content-body">
         <div class="content-wrapper">
           <router-view />
@@ -21,12 +22,25 @@ export default {
   components: {
     Sidebar,
     Navbar
+  },
+  data() {
+    return {
+      mobileSidebarOpen: false
+    };
+  },
+  methods: {
+    toggleSidebar() {
+      this.mobileSidebarOpen = !this.mobileSidebarOpen;
+    },
+    closeSidebar() {
+      this.mobileSidebarOpen = false;
+    }
   }
 }
 </script>
 
 <style scoped>
-.dashboard-layout {
+  .dashboard-layout {
   display: flex;
   height: 100vh;
 }
@@ -58,6 +72,24 @@ export default {
 
   .content-body {
     padding: 1rem;
+  }
+}
+
+/* Backdrop controlled by parent - appears when sidebar is open on small screens */
+.sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.35);
+    z-index: 50;
+    display: none;
+  }
+  .sidebar-backdrop.show {
+    display: block;
   }
 }
 </style>

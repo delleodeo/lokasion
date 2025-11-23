@@ -10,13 +10,13 @@
       </thead>
       <tbody>
         <tr v-for="record in attendanceData" :key="record._id">
-          <td>
+          <td data-label="Event Name">
             <span class="event-name">{{ record.event_name || 'Unknown Event' }}</span>
           </td>
-          <td>
+          <td data-label="Check-In Time">
             <span class="timestamp">{{ formatDateTime(record.timestamp) }}</span>
           </td>
-          <td>
+          <td data-label="Status">
             <span :class="['status-badge', statusClass(record.status)]">
               <CheckCircleIcon v-if="record.status === 'Present'" class="status-icon" />
               <XCircleIcon v-else class="status-icon" />

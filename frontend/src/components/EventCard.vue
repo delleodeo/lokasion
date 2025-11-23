@@ -720,5 +720,12 @@ export default {
   .event-header h3 {
     font-size: 1.1rem;
   }
+
+  /* make action buttons stack nicely on small screens */
+  .action-buttons {
+    flex-direction: column;
+  }
+
+  .check-in-button, .check-out-button { width: 100%; }
 }
 </style>

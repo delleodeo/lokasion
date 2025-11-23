@@ -83,7 +83,10 @@
             <UserCircleIcon class="info-icon" />
             <div>
               <span class="info-label">Student ID</span>
-              <span class="info-value student-id">{{ enrollment.user_id }}</span>
+              <!-- Use the registration field `user_id_number` when provided, otherwise show N/A -->
+                <span :class="['info-value', 'student-id', { 'not-set': !enrollment.user_id_number || enrollment.user_id_number === 'N/A' }]">
+                  {{ enrollment.user_id_number && enrollment.user_id_number !== 'N/A' ? enrollment.user_id_number : 'N/A' }}
+              </span>
             </div>
           </div>
 
@@ -797,6 +800,18 @@ export default {
   font-size: 0.85rem;
   color: var(--dark-green);
   border: 1px solid var(--medium-green);
+  display: inline-block;
+  min-width: 36px;
+  text-align: center;
+}
+
+.student-id.not-set {
+  /* N/A / not provided styling */
+  background: transparent;
+  color: var(--gray-600);
+  border-color: var(--gray-200);
+  font-style: italic;
+  opacity: 0.9;
 }
 
 .student-id-number {

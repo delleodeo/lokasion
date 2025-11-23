@@ -33,6 +33,11 @@ body {
   --transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   --border-radius: 12px;
   --border-radius-lg: 16px;
+  /* breakpoint tokens */
+  --breakpoint-sm: 480px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --container-max: 1200px;
 }
 
 a {
@@ -141,6 +146,90 @@ input, textarea, select {
 
 .fade-in {
   animation: fadeIn 0.3s ease-out;
+}
+
+/* Layout & responsive utilities */
+.container {
+  width: 100%;
+  max-width: var(--container-max);
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  box-sizing: border-box;
+}
+
+.page-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+/* larger screens get a two-column grid by default where appropriate */
+@media (min-width: calc(var(--breakpoint-md) + 1px)) {
+  .page-grid.cols-2 {
+    grid-template-columns: 1fr 360px;
+  }
+}
+
+/* Accessible focus utilities */
+:focus {
+  outline: none;
+}
+
+/* quite visible focus ring for keyboard users */
+.focus-ring:focus {
+  box-shadow: 0 0 0 4px rgba(11,110,253,0.12);
+  border-radius: 8px;
+}
+
+/* make buttons and related pressable controls easier to tap */
+.touch-target {
+  min-height: 44px; /* accessibility guideline */
+  min-width: 44px;
+  padding: 0.5rem 0.75rem;
+}
+
+/* Responsive table -> stacked rows on small screens */
+@media (max-width: var(--breakpoint-md)) {
+  .attendance-table thead { display: none; }
+  .attendance-table, .attendance-table tbody, .attendance-table tr, .attendance-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .attendance-table tr {
+    margin-bottom: 1rem;
+    border-radius: 12px;
+    padding: 0.75rem;
+    background: white;
+    border: 1px solid var(--gray-200);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .attendance-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: none;
+  }
+
+  .attendance-table td::before {
+    content: attr(data-label);
+    display: block;
+    font-weight: 700;
+    color: var(--gray-600);
+    margin-bottom: 0.35rem;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+  }
+}
+
+/* helpers to hide/show elements responsively */
+.hide-mobile { display: block; }
+.show-mobile { display: none; }
+
+@media (max-width: var(--breakpoint-md)) {
+  .hide-mobile { display: none !important; }
+  .show-mobile { display: block !important; }
 }
 
 .slide-up {
