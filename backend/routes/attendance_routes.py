@@ -282,11 +282,11 @@ async def export_event_attendance(event_id: str, token: dict = Depends(decodeJWT
                 detail="Invalid or expired token",
             )
         
-        # Verify the user is a teacher
-        if token.get("role") != "teacher":
+        # Allow both admins and teachers to export attendance
+        if token.get("role") not in ["teacher", "admin"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only teachers can export event attendance",
+                detail="Only teachers and admins can export event attendance",
             )
         
         try:

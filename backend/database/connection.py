@@ -3,7 +3,7 @@ from pymongo import MongoClient
 import os
 
 # Try to load from environment variable, fallback to localhost
-MONGO_DETAILS = os.getenv("MONGO_DETAILS", "mongodb://localhost:27017")
+MONGO_DETAILS = os.getenv("MONGO_DETAILS", "mongodb+srv://doroshop01_db_user:lokasion@cluster0.ys6oklr.mongodb.net/?appName=Cluster0")
 
 print(f"[CONNECT] Attempting to connect to MongoDB: {MONGO_DETAILS[:50]}...")
 

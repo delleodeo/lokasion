@@ -195,7 +195,7 @@
       </div>
 
       <!-- Quick Actions Card -->
-      <div class="admin-card actions-card">
+      <!-- <div class="admin-card actions-card">
         <div class="card-header">
           <div class="card-icon settings-icon">
             <Cog6ToothIcon />
@@ -220,7 +220,7 @@
             <span>View Reports</span>
           </button>
         </div>
-      </div>
+      </div> -->
     </div>
 
     <!-- Delete Confirmation Modal -->
@@ -317,11 +317,23 @@ export default {
     async fetchStatistics() {
       try {
         const token = localStorage.getItem('token');
-        // Fetch statistics from various endpoints
-        // Note: You may need to add these endpoints in the backend
-        this.totalUsers = 0; // Placeholder
-        this.totalEvents = 0; // Placeholder
-        this.totalAttendance = 0; // Placeholder
+        // Fetch total users
+        const usersRes = await axios.get(`${API_BASE_URL}/admin/users`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        this.totalUsers = Array.isArray(usersRes.data) ? usersRes.data.length : 0;
+
+        // Fetch total events
+        const eventsRes = await axios.get(`${API_BASE_URL}/admin/events`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        this.totalEvents = Array.isArray(eventsRes.data) ? eventsRes.data.length : 0;
+
+        // Fetch total attendance records
+        const attendanceRes = await axios.get(`${API_BASE_URL}/admin/attendance`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        this.totalAttendance = Array.isArray(attendanceRes.data) ? attendanceRes.data.length : 0;
       } catch (error) {
         console.error('Failed to fetch statistics:', error);
       }
